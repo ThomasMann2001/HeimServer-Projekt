@@ -2,15 +2,16 @@
 
 This document gives an overview of my current Unraid homelab architecture and the direction I want to take it in.
 
-The setup is used as a practical learning environment for system administration, self-hosting, backups, internal DNS, reverse proxying and security-focused network design. It is not meant to be a finished enterprise setup, but a continuously improved homelab with real services and real operational requirements.
+The setup is used as a practical learning environment for system administration, self-hosting, backups, internal DNS, reverse proxying and security-focused network design. It is not meant to be a finished enterprise setup, but a homelab that is continuously improved while running real services.
 
 ## High-Level Overview
 
-The homelab is built around one Unraid server. It provides storage, runs my Docker-based services and also gives me a place to test new tools and concepts.
+The homelab is built around one Unraid server. It provides storage, runs my Docker-based services and gives me a place to test new tools and concepts.
 
 Main responsibilities of the system:
 
 - Storage management with Unraid
+- Planned parity protection for the array
 - Docker-based service hosting
 - Internal DNS and service discovery
 - Internal HTTPS access through a reverse proxy
@@ -25,12 +26,14 @@ Main responsibilities of the system:
 flowchart TD
     Internet((Internet))
     Fritzbox["FRITZ!Box / Current Router"]
-    LAN["Local Network"]
+    Switch["Local Network / Managed Switch"]
+    Clients["Local Clients"]
     Unraid["Unraid Server"]
 
     Internet --> Fritzbox
-    Fritzbox --> LAN
-    LAN --> Unraid
+    Fritzbox --> Switch
+    Switch --> Clients
+    Switch --> Unraid
 
     subgraph UnraidHost["Unraid Host"]
         Docker["Docker Engine"]
@@ -78,13 +81,14 @@ flowchart TD
 
 | Component | Role |
 |---|---|
-| FRITZ!Box | Current router and internet gateway |
+| FRITZ!Box | Current router, internet gateway and VPN endpoint |
+| Managed Switch | Connects wired devices such as the Unraid server and local clients |
 | Unraid Server | Central storage and container host |
 | Docker | Runs the self-hosted services |
 | NVMe SSD | AppData, Docker data and cache workloads |
-| Unraid Array | Main storage for persistent data |
+| Unraid Array | Main storage for persistent data, with parity protection planned |
 | Backup Disk | Local backup target for selected shares and AppData backups |
-| SATA SSD | Virtual machines, testing and experiments |
+| SATA SSD | Virtual machines, testing and experimental workloads |
 | AdGuard Home + Unbound | Internal DNS, filtering and DNS resolution |
 | Nginx Proxy Manager + CrowdSec | Internal reverse proxy and additional security layer |
 | Vaultwarden | Self-hosted password management |
@@ -155,20 +159,20 @@ The UniFi Cloud Gateway Fibre will act as the central gateway and firewall. A ma
 
 ```mermaid
 flowchart TD
-    Internet((Internet))
+    Internet2((Internet))
     UCG["UniFi Cloud Gateway Fibre<br>Gateway / Firewall"]
-    Switch["Managed Switch"]
-    Unraid["Unraid Server"]
+    Switch2["Managed Switch"]
+    Unraid2["Unraid Server"]
     AP["U7 Lite Access Point"]
-    Clients["Wired Clients"]
-    WiFi["Wi-Fi Clients / IoT Devices"]
+    WiredClients["Wired Clients"]
+    WiFiClients["Wi-Fi Clients / IoT Devices"]
 
-    Internet --> UCG
-    UCG --> Switch
-    Switch --> Unraid
-    Switch --> AP
-    Switch --> Clients
-    AP --> WiFi
+    Internet2 --> UCG
+    UCG --> Switch2
+    Switch2 --> Unraid2
+    Switch2 --> AP
+    Switch2 --> WiredClients
+    AP --> WiFiClients
 ```
 
 ## Planned VLAN Design
@@ -179,7 +183,7 @@ This is the security direction I want to move toward once the UniFi gateway and 
 
 ```mermaid
 flowchart LR
-    UCG["UniFi Cloud Gateway Fibre<br>Firewall Rules"]
+    UCG2["UniFi Cloud Gateway Fibre<br>Firewall Rules"]
 
     TrustedLAN["Trusted LAN<br>Admin devices / main clients"]
     ServerVLAN["Server VLAN<br>Unraid and infrastructure services"]
@@ -187,16 +191,16 @@ flowchart LR
     GuestVLAN["Guest VLAN<br>Guest devices"]
     VPN["VPN Access<br>Remote administration"]
 
-    UCG --> TrustedLAN
-    UCG --> ServerVLAN
-    UCG --> IoTVLAN
-    UCG --> GuestVLAN
-    UCG --> VPN
+    UCG2 --> TrustedLAN
+    UCG2 --> ServerVLAN
+    UCG2 --> IoTVLAN
+    UCG2 --> GuestVLAN
+    UCG2 --> VPN
 
     TrustedLAN -. allowed access .-> ServerVLAN
     VPN -. allowed access .-> ServerVLAN
     IoTVLAN -. limited access to Home Assistant / MQTT .-> ServerVLAN
-    GuestVLAN -. internet only .-> UCG
+    GuestVLAN -. internet only .-> UCG2
 ```
 
 ## Planned Segmentation Goals
@@ -221,3 +225,4 @@ Important design points:
 - Internal DNS and reverse proxying make services easier to access
 - Container data should be restorable through AppData backups
 - The network should later be segmented with VLANs and firewall rules
+- Parity is planned for availability, but backups are still required
