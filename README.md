@@ -42,9 +42,17 @@ The main focus areas are:
 | CPU | Intel Core i5-12500T |
 | Memory | 32 GiB DDR4 |
 | PSU | NZXT Core Gold 750 W |
+| M.2 PCIe SATA expansion adapter | 
+| Provides additional SATA ports for the Jonsbo N6 drive bays |
 | Operating System | Unraid |
 
 ---
+
+## Hardware Build
+
+![Jonsbo N6 Homelab Build](screenshots/sanitized/jonsbo-n6-front.jpg)
+
+The system is built in a compact Jonsbo N6 case with up to nine drive bays. It is used as my Unraid-based homelab for storage, Docker services, backups and lab workloads.
 
 ## Storage Overview
 
