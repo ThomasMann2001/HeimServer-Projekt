@@ -1,0 +1,36 @@
+# Secrets and environment files
+.env
+*.env
+secrets.yaml
+secrets.yml
+*.secret
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.tmp
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local notes
+private/
+local/
+notes-private/
+
+# Unraid / homelab sensitive exports
+diagnostics/
+config/
+super.dat
+*.cfg
