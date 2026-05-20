@@ -16,6 +16,8 @@ The main idea is to keep application data, user data, backups and lab workloads 
 | HDD | Additional data disk | 8 TB or larger planned | Future expansion if required |
 | SATA SSD | Micron 1100 MTFDDAK256TBN | 256 GB | Virtual machines, testing and experiments |
 
+Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adapter. This allows more drives to be connected than the mainboard SATA ports alone would support, while still keeping the build compact.
+
 ## Design Principles
 
 The storage layout is based on clear roles:
