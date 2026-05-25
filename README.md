@@ -1,3 +1,10 @@
+## Kurzbeschreibung
+
+Dieses Repository dokumentiert mein privates Unraid-basiertes Homelab.
+Der Fokus liegt auf Storage-Design, Docker-Services, Backup-Strategie,
+internem DNS, Reverse Proxying, VPN-first Zugriff und einer geplanten
+VLAN-/Firewall-Segmentierung mit UniFi.
+
 # Unraid Homelab Infrastructure
 
 This repository documents my Unraid-based homelab.
