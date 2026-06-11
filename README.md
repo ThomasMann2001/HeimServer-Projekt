@@ -227,19 +227,19 @@ The U6+ access point is connected directly to the gateway via PoE, while the Unr
 
 Current network zones:
 
-| Zone | VLAN ID | Purpose |
-|---|---:|---|
-| Default | 1 | Default/native network, kept minimal for compatibility and transition purposes |
-| Management | 10 | Network and admin devices |
-| Trusted | 20 | Main trusted clients and daily-use devices |
-| Untrusted | 25 | Less trusted client devices with restricted internal access |
-| Server | 30 | Unraid and infrastructure services |
-| Media | 40 | Media and TV devices |
-| IoT | 50 | Smart home and IoT devices |
-| Guest | 60 | Guest devices with internet-only access |
-| Lab | 70 | Testing and lab devices |
-| Print | 80 | Printer devices |
-| VPN | - | Remote access to selected internal services |
+| Zone | Purpose |
+|---|---|
+| Default / Native | Kept minimal for compatibility and transition purposes |
+| Management | Network and admin devices |
+| Trusted | Main trusted clients and daily-use devices |
+| Untrusted | Less trusted client devices with restricted internal access |
+| Server | Unraid and infrastructure services |
+| Media | Media and TV devices |
+| IoT | Smart home and IoT devices |
+| Guest | Guest devices with internet-only access |
+| Lab | Testing and lab devices |
+| Print | Printer devices |
+| VPN | Remote access to selected internal services |
 
 The VLANs are separated through firewall rules. The goal is to allow only required traffic between zones and reduce unnecessary lateral movement inside the network.
 
