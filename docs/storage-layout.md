@@ -1,8 +1,10 @@
 # Storage Layout
 
-This document describes how storage is currently planned and used in my Unraid homelab.
+This document describes the current storage layout of my Unraid-based homelab.
 
-The main idea is to keep application data, user data, backups and lab workloads separated as much as possible. This makes the system easier to maintain, back up and expand later.
+The goal of the storage design is to separate different workload types instead of placing everything on one disk or pool. Application data, long-term storage, backups, private data and lab workloads each have their own role.
+
+---
 
 ## Storage Overview
 
@@ -10,72 +12,144 @@ The main idea is to keep application data, user data, backups and lab workloads 
 |---|---:|---:|---|
 | NVMe SSD | WD Red SN700 | 500 GB | AppData, Docker data and cache |
 | HDD | WDC WD80EFPX | 8 TB | Main data disk |
-| HDD | Planned parity disk | 8 TB or larger | Unraid parity protection |
+| HDD | Parity disk | 8 TB | Unraid parity protection |
 | HDD | WDC WD40EFRX | 4 TB | Local backup target |
-| HDD | Private data disk | 4 TB planned | Private and important data |
-| HDD | Additional data disk | 8 TB or larger planned | Future expansion if required |
+| HDD | Private data disk | 4 TB | Private and important data |
 | SATA SSD | Micron 1100 MTFDDAK256TBN | 256 GB | Virtual machines, testing and experiments |
 
-Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adapter. This allows more drives to be connected than the mainboard SATA ports alone would support, while still keeping the build compact.
+Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adapter. This allows the compact Jonsbo N6 build to use more drive bays than the mainboard alone would provide.
 
-## Design Principles
+---
 
-The storage layout is based on clear roles:
+## Design Goals
 
-- The NVMe SSD is used for AppData, Docker workloads and cache.
-- The main HDD is used for persistent user data.
-- A dedicated parity disk is planned to protect the Unraid array against a single disk failure.
-- A separate HDD is used as a local backup target.
-- Private and important data will be separated onto its own disk once the planned storage layout is complete.
-- The SATA SSD is reserved for VMs, testing and experiments.
-- Future expansion is planned with an additional 8 TB or larger disk if the current capacity is no longer enough.
+The storage layout follows a few simple principles:
 
-## Cache and AppData
+- Keep Docker AppData and cache workloads on SSD storage
+- Use the Unraid array for long-term data storage
+- Use parity for disk availability
+- Keep backups separate from normal productive data
+- Keep private and important data separated from general storage
+- Use a separate SSD for virtual machines, testing and lab workloads
+- Keep the layout understandable and easy to expand later
 
-The WD Red SN700 NVMe SSD is used for AppData and cache workloads.
+---
 
-This keeps container data and application state separate from the larger HDD-based array. It also makes it easier to back up and restore services, because most container-related data is stored in one clearly defined place.
+## NVMe SSD - AppData and Cache
 
-Typical data stored here:
+The WD Red SN700 NVMe SSD is used for AppData, Docker data and cache-related workloads.
+
+This keeps frequently changing application data away from the slower HDD array and improves responsiveness for containerized services.
+
+Typical data on this SSD includes:
 
 - Docker AppData
-- Container configuration
-- Application state
-- Databases used by self-hosted services
-- Cache data before it is moved to the array
+- Application databases
+- Container configuration data
+- Cache workloads
+- Frequently changing service data
 
-## Array Design
+This data is important for service recovery and is included in the AppData backup strategy.
+
+---
+
+## Unraid Array
 
 The Unraid array is used for long-term data storage.
 
-The current main data disk is an 8 TB WDC WD80EFPX. A parity disk of at least 8 TB is planned, because the parity disk must be at least as large as the largest data disk in the array.
+The current main data disk is an 8 TB WDC WD80EFPX. The array also uses an 8 TB parity disk.
 
-Once parity is active, the array can tolerate the failure of one data disk. I still treat parity only as availability protection, not as a replacement for backups.
+The parity disk is at least as large as the largest data disk in the array, which is required for Unraid parity protection. With parity active, the array can tolerate the failure of one data disk.
 
-## Backup Disk
+Parity is not treated as a backup. It does not protect against accidental deletion, corruption, ransomware, misconfiguration or user mistakes.
 
-The 4 TB WDC WD40EFRX is used as a dedicated local backup target.
-
-The backup share is intentionally restricted to the required disk. This keeps the backup target separated from normal storage and avoids unnecessary access to other disks.
-
-This local backup is useful for quick restores, but it is not a complete 3-2-1 backup strategy on its own. An offsite backup target is planned for important data.
+---
 
 ## Private Data Disk
 
-A separate 4 TB disk is planned for private and important data.
+A separate 4 TB disk is used for private and important data.
 
-The goal is to keep sensitive personal data separate from general-purpose storage. Once parity is active and the disk is added to the array, this data will also be covered by Unraid parity protection.
+The goal is to keep sensitive personal data separated from general-purpose storage. Since parity is active, this disk is also protected by Unraid parity against a single data disk failure.
 
-## VM and Lab SSD
+Private data is still included in the backup planning separately. Parity only helps with availability and does not replace backups.
 
-The Micron 1100 SATA SSD is reserved for virtual machines, testing and experiments.
+---
 
-I do not want temporary lab workloads mixed with productive data or backup targets. Keeping this on a separate SSD makes it easier to test things without affecting the main storage layout.
+## Local Backup Disk
+
+A dedicated 4 TB HDD is used as a local backup target.
+
+This disk is used for selected AppData and share-level backups. It is separated from the normal productive storage layout to reduce the risk of mixing active data and backup data.
+
+The local backup disk is useful for quick restores, but it is not the final backup concept. An offsite backup target is still planned for important data.
+
+More details: [Backup Strategy](backup-strategy.md)
+
+---
+
+## SATA SSD - VMs and Lab Workloads
+
+A separate 256 GB SATA SSD is used for virtual machines, testing and lab workloads.
+
+The purpose of this disk is to keep experimental workloads away from the main data array and from important Docker AppData.
+
+Example use cases:
+
+- Virtual machines
+- Temporary test environments
+- Lab workloads
+- Experiments that should not affect productive data
+
+---
+
+## Hardware and Drive Bays
+
+The system is built in a Jonsbo N6 case. The case provides enough drive bays for parity, data disks, backup storage, private data and future expansion.
+
+Drive labels, serial numbers and barcodes are intentionally redacted before publishing screenshots.
+
+---
+
+## Backup Considerations
+
+The storage layout is designed with backups in mind.
+
+Important points:
+
+- AppData is backed up separately because it is required for service recovery.
+- Selected user data is backed up weekly.
+- Mostly static archive data is backed up monthly.
+- The local backup disk is only one backup layer.
+- Offsite backup is still planned for important data.
+- Parity is not considered a backup.
+
+---
 
 ## Future Expansion
 
-The system is prepared for additional storage if needed.
+The current storage layout is sufficient for now.
 
-The next expansion would likely be an additional 8 TB or larger HDD. If a disk larger than 8 TB is added later, the parity disk would also need to be at least that size.
+The Jonsbo N6 still provides enough drive bays for future expansion if storage requirements change later. At the moment, no additional data disk is planned.
 
-For now, expansion depends on actual storage usage. If the current 8 TB data disk remains sufficient, the additional disk can be delayed.
+Possible future improvements:
+
+- Add offsite backup storage
+- Add more storage if data requirements increase
+- Improve restore documentation
+- Document restore tests
+- Add more monitoring for disk health and backup jobs
+
+---
+
+## Summary
+
+The storage layout separates different workload types into clear roles:
+
+- NVMe SSD for AppData, Docker data and cache
+- Unraid array for long-term data storage
+- Active parity for single data disk failure protection
+- Dedicated local backup disk
+- Separate private data disk
+- Separate SATA SSD for VMs and lab workloads
+
+This keeps the system easier to understand, easier to maintain and safer to expand over time.
