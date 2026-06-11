@@ -242,6 +242,7 @@ Current network zones:
 | VPN | Remote access to selected internal services |
 
 The VLANs are separated through firewall rules. The goal is to allow only required traffic between zones and reduce unnecessary lateral movement inside the network.
+Exact VLAN IDs, IP ranges, internal hostnames and detailed firewall rule names are intentionally not published in this repository.
 
 More details: [Network Roadmap](docs/network-roadmap.md)
 
