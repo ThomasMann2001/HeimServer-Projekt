@@ -1,46 +1,52 @@
 # Backup Strategy
 
-This document describes the backup strategy for my Unraid-based homelab.
+This document describes how I currently handle backups in my Unraid homelab.
 
-The goal is to separate availability, backup and restore planning. Unraid parity, local backups and future offsite backups all have different purposes and should not be treated as the same thing.
+I separate three things that are easy to mix up:
 
----
+- parity for disk availability
+- local backups for quick restores
+- offsite backups for real disaster recovery
 
-## Goals
-
-The main goals of the backup strategy are:
-
-- Protect important service data
-- Make Docker services recoverable
-- Back up selected user data regularly
-- Separate backup data from normal productive storage
-- Keep backup jobs understandable and maintainable
-- Avoid backing up unnecessary temporary data
-- Prepare for a future offsite backup target
-- Document restore planning and limitations
+Parity is already active, but I do not treat it as a backup.
 
 ---
 
-## Important Distinction: Parity vs Backup
+## What I want from the backup setup
+
+The backup setup should help me recover from realistic problems, not just from a failed disk.
+
+The most important cases are:
+
+- a broken Docker container update
+- accidental deletion
+- wrong configuration changes
+- corrupted application data
+- restoring important shares
+- rebuilding the system without guessing where important data was stored
+
+For now, the setup is focused on AppData backups, selected share-level backups and a dedicated local backup disk. Offsite backup is still planned.
+
+---
+
+## Parity vs Backup
 
 The Unraid array uses active parity protection.
 
-Parity helps with availability and protects against the failure of a single data disk. It allows the system to keep data available or rebuild data when one data disk fails.
+Parity protects against the failure of a single data disk. That is useful, but it only helps with availability.
 
-Parity is not a backup.
+It does not protect against:
 
-Parity does not protect against:
+- accidental deletion
+- file corruption
+- ransomware
+- broken updates
+- misconfiguration
+- user mistakes
+- complete system loss
+- theft, fire or water damage
 
-- Accidental deletion
-- File corruption
-- Ransomware
-- Misconfiguration
-- Broken updates
-- User mistakes
-- Complete system loss
-- Theft, fire or water damage
-
-Backups are handled separately from parity.
+Backups are planned separately from parity.
 
 ---
 
@@ -59,21 +65,20 @@ Backups are handled separately from parity.
 
 ## AppData Backup
 
-AppData is one of the most important parts of the system because it contains the state and configuration of Docker services.
+AppData is one of the most important parts of the system. It contains the configuration and state of many Docker services.
 
-Typical AppData contents include:
+Typical AppData contents:
 
-- Container configuration
-- Application databases
-- Service state
-- Reverse proxy configuration
+- container configuration
+- application databases
+- reverse proxy configuration
 - DNS/filtering configuration
-- Smart home service data
-- Password manager service data
+- smart home service data
+- password manager service data
 
-The AppData backup is used to make services recoverable after a broken update, misconfiguration, disk issue or system migration.
+If I had to rebuild the server, AppData would be one of the first things I would need back.
 
-Important services such as Vaultwarden, Home Assistant, AdGuard Home and Nginx Proxy Manager are treated as higher-priority services for backup and restore planning.
+Services like Vaultwarden, Home Assistant, AdGuard Home and Nginx Proxy Manager are especially important for restore planning.
 
 ---
 
@@ -81,16 +86,14 @@ Important services such as Vaultwarden, Home Assistant, AdGuard Home and Nginx P
 
 Share-level backups are used for selected user data.
 
-The backup schedule depends on how often the data changes.
+The schedule depends on how often the data changes.
 
 | Backup Type | Schedule | Retention | Scope |
 |---|---:|---:|---|
 | Weekly backup | `0 5 * * 1` | 8 versions | Photos and selected important data |
 | Monthly backup | `30 5 1 * *` | 6 versions | Mostly static archive data |
 
-The goal is not to back up every file with the same frequency. Frequently changing data is backed up more often, while mostly static archive data is backed up less often.
-
-Real share names and private paths are intentionally not published in this repository.
+I do not back up every share with the same frequency. Data that changes more often gets a shorter backup interval. Mostly static archive data is backed up less often.
 
 ---
 
@@ -98,17 +101,16 @@ Real share names and private paths are intentionally not published in this repos
 
 A dedicated 4 TB HDD is used as the local backup target.
 
-This disk is separated from the normal productive storage layout. The goal is to avoid mixing active data and backup data on the same logical storage area.
+This disk is separated from normal productive storage. I use it for quick restores and for keeping versioned copies of selected data.
 
 The local backup disk is useful for:
 
-- Quick restores
-- Recovering accidentally deleted files
-- Rolling back selected data
-- Restoring service data after a failed update
-- Testing backup jobs before adding offsite storage
+- restoring deleted files
+- rolling back selected folders
+- recovering service data after a failed update
+- testing backup jobs before adding offsite storage
 
-However, a local backup disk is not enough for a complete backup strategy. It does not protect against full system loss, theft, fire, water damage or other local disasters.
+It is still only a local backup. If the whole server is lost, this disk would likely be lost as well. That is why offsite backup is still an open point.
 
 ---
 
@@ -116,30 +118,27 @@ However, a local backup disk is not enough for a complete backup strategy. It do
 
 Share-level backups are handled through rsync-based scripts managed by the Unraid User Scripts plugin.
 
-The backup scripts are designed to be understandable and predictable.
+The scripts are intentionally simple and readable. I prefer something I can understand later over a backup setup that works like magic until it breaks.
 
-The general approach is:
+The current approach:
 
-- Use separate jobs for different backup scopes
-- Use clear schedules
-- Use versioned backup directories
-- Keep a limited number of backup versions
-- Avoid publishing private share names or internal paths
-- Keep public examples sanitized
+- separate jobs for different backup scopes
+- clear schedules
+- versioned backup directories
+- limited retention
+- sanitized public example script
 
-A sanitized example script is available here:
+A sanitized example is available here:
 
 - [Share backup example](../scripts/share-backup-example.sh)
 
-The public script is intentionally generic. It does not include real share names, private paths, internal hostnames or sensitive information.
+The public script is generic and does not contain my real private share names or paths.
 
 ---
 
-## Retention Strategy
+## Retention
 
-The current retention strategy keeps multiple backup versions instead of only keeping the newest copy.
-
-This helps with cases where a problem is noticed later, for example after accidental deletion or corruption.
+The backup jobs keep multiple versions instead of only the newest copy.
 
 Current retention:
 
@@ -148,56 +147,27 @@ Current retention:
 | Weekly backups | 8 |
 | Monthly backups | 6 |
 
-This is a practical starting point for the current storage size and importance of the data. Retention can be adjusted later if storage requirements or restore requirements change.
+This is a practical starting point for now. I may adjust the retention later depending on storage usage and how often I actually need older versions.
 
 ---
 
 ## Restore Planning
 
-A backup is only useful if it can be restored.
+A backup is only useful if I know how to restore it.
 
-Current restore planning focuses on:
+The most important restore scenarios for me are:
 
-- Restoring Docker AppData
-- Restoring selected share data
-- Understanding which services depend on which data
-- Keeping backup paths and schedules documented
-- Avoiding undocumented one-off backup jobs
+- restore Docker AppData
+- restore a selected share or folder
+- bring DNS and reverse proxy services back quickly
+- restore Home Assistant and MQTT/Zigbee services
+- restore sensitive services like Vaultwarden carefully
 
-Restore testing should be documented more clearly over time.
-
-Planned restore documentation:
-
-- AppData restore procedure
-- Selected share restore procedure
-- Service-specific restore notes
-- Restore test results
-- Recovery order for important services
+Restore documentation is still something I want to improve. The next step is not only having backups, but also documenting test restores.
 
 ---
 
-## 3-2-1 Backup Status
-
-The long-term goal is to move closer to a 3-2-1 backup strategy.
-
-Current state:
-
-- Primary data on the Unraid array
-- Active parity protection for the array
-- Dedicated local backup disk for selected data
-- AppData backup for service recovery
-- Weekly and monthly share backups
-
-Still missing:
-
-- Offsite backup for important data
-- Better restore documentation
-- Regular restore testing
-- Monitoring/notifications for failed backup jobs
-
----
-
-## Data Classification
+## Data Priority
 
 Not all data has the same backup priority.
 
@@ -212,65 +182,37 @@ Not all data has the same backup priority.
 | Temporary test data | Low | Usually not backed up |
 | Lab workloads | Low to medium | Depends on importance |
 
-This classification helps avoid wasting backup space on temporary or easily reproducible data.
+This helps me avoid wasting backup space on data that is temporary or easy to recreate.
 
 ---
 
-## Security Considerations
+## 3-2-1 Status
 
-Backup data can contain sensitive information.
-
-For this reason:
-
-- Real backup paths are not published
-- Real share names are not published
-- Secrets, keys and tokens are not included in public examples
-- Screenshots are sanitized before publishing
-- Backup scripts in this repository are examples only
-
-Backup targets should also be protected from unnecessary access. A backup disk should not be treated like normal shared storage.
-
----
-
-## Current Limitations
-
-The backup setup is functional, but not finished.
-
-Current limitations:
-
-- Offsite backup is still planned
-- Restore tests need better documentation
-- Monitoring/notifications for failed backup jobs should be improved
-- Long-term retention may need adjustment over time
-- Backup coverage should be reviewed when new services are added
-
----
-
-## Future Improvements
-
-Planned improvements:
-
-- Add offsite backup for important data
-- Document AppData restore procedure
-- Document selected share restore procedure
-- Add restore test notes
-- Add monitoring or notifications for failed backup jobs
-- Review retention strategy over time
-- Keep backup scripts and documentation aligned
-
----
-
-## Summary
-
-The backup strategy separates parity, local backups and future offsite backups.
+The setup is not a complete 3-2-1 backup strategy yet.
 
 Current state:
 
-- Unraid parity is active
-- AppData backup is implemented
-- Weekly backups are implemented for photos and selected important data
-- Monthly backups are implemented for mostly static archive data
-- A dedicated local backup disk is used
-- Offsite backup is still planned
+- primary data on the Unraid array
+- active parity protection for the array
+- dedicated local backup disk
+- AppData backup
+- weekly and monthly share backups
 
-The setup is already useful for local recovery, but the long-term goal is to improve restore documentation, testing and offsite protection.
+Still missing:
+
+- offsite backup for important data
+- documented restore tests
+- monitoring or notifications for failed backup jobs
+
+---
+
+## Open Points
+
+Things I still want to improve:
+
+- add offsite backup for important data
+- document AppData restore steps
+- document selected share restore steps
+- test restores and write down the results
+- add notifications for failed backup jobs
+- review backup coverage when new services are added
