@@ -2,355 +2,183 @@
 
 This document gives an overview of the main services running in my Unraid homelab.
 
-The goal is not to document every single container I have ever tested. I want this file to show the services that are relevant for the infrastructure itself: DNS, reverse proxying, backups, smart home, internal documentation, network visibility and services with important persistent data.
+It is not meant to be a full container inventory. I only document the services that are relevant for infrastructure, restore planning, access paths or persistent data.
 
-Some personal, temporary or experimental workloads are intentionally left out.
+Some personal, temporary or experimental containers are intentionally left out.
 
 ---
 
-## Service Categories
+## Service Map
 
-| Category | Services | Purpose |
+| Area | Services | Dependencies / Notes |
 |---|---|---|
-| DNS and name resolution | AdGuard Home, Unbound | Internal DNS, filtering and upstream DNS resolution |
-| Reverse proxy and security | Nginx Proxy Manager, CrowdSec | Internal service access and additional security visibility |
-| Password management | Vaultwarden | Self-hosted password management |
-| Smart home | Home Assistant, Mosquitto, Zigbee2MQTT, Matter Server | Smart home automation and device integration |
-| Photo management | Immich stack | Self-hosted photo management |
-| Network visibility | WatchYourLAN | Basic LAN device visibility |
-| Knowledge and documentation | Kiwix, Joplin | Local knowledge, notes and documentation |
-| Backend services | PostgreSQL, Redis | Databases and supporting services for applications |
+| DNS and name resolution | AdGuard Home, Unbound | Important for internal service access and filtering |
+| Reverse proxy and security | Nginx Proxy Manager, CrowdSec | Used for internal HTTPS access and additional visibility |
+| Password management | Vaultwarden | Sensitive service, high backup and restore priority |
+| Smart home | Home Assistant, Mosquitto, Zigbee2MQTT, Matter Server | Home Assistant depends on MQTT, Zigbee and Matter integrations |
+| Photo management | Immich | Depends on PostgreSQL, Redis and the photo library |
+| Network visibility | WatchYourLAN | Basic device visibility inside the LAN |
+| Knowledge and documentation | Kiwix, Joplin | Local knowledge base, notes and documentation |
+| Backend services | PostgreSQL, Redis | Used by selected applications, especially services with persistent state |
 
 ---
 
-## Core Infrastructure Services
+## Core Infrastructure
 
-### AdGuard Home and Unbound
+### DNS: AdGuard Home and Unbound
 
-AdGuard Home and Unbound are used for internal DNS resolution, DNS filtering and upstream DNS resolution.
+AdGuard Home and Unbound are part of the base infrastructure.
 
-This is one of the core parts of the homelab because many internal services are accessed through readable internal hostnames instead of direct IP addresses and ports.
+They provide internal DNS resolution, filtering and upstream DNS resolution. If DNS is down, many internal services are still technically running, but access becomes much less convenient.
 
-Main purpose:
+Why it matters:
 
-- Internal DNS resolution
-- DNS rewrites for local services
+- readable internal service names
 - DNS filtering
-- Better visibility into DNS requests
-- Cleaner internal service access
-- Foundation for reverse proxy usage
+- DNS query visibility
+- foundation for clean reverse proxy usage
 
-Internal hostnames, DNS rewrites and IP addresses are intentionally not published in this repository.
-
----
-
-### Nginx Proxy Manager and CrowdSec
-
-Nginx Proxy Manager is used as the internal reverse proxy.
-
-It helps provide cleaner access to selected services by using hostnames instead of direct IP and port combinations. In my setup, the reverse proxy is mainly used for internal access and does not mean that services are publicly exposed by default.
-
-CrowdSec is used as an additional security and visibility component around the proxy stack.
-
-Main purpose:
-
-- Internal reverse proxy
-- Cleaner service access
-- HTTPS handling for internal services
-- Centralized access paths for selected services
-- Additional security visibility through CrowdSec
-
-The reverse proxy is not treated as a replacement for firewall rules, VPN access or careful service exposure decisions.
+For restore planning, DNS is one of the first services I would bring back.
 
 ---
 
-## Password Management
+### Reverse Proxy: Nginx Proxy Manager and CrowdSec
+
+Nginx Proxy Manager is used for selected internal access paths.
+
+The reverse proxy keeps service access cleaner because I do not have to remember every IP and port combination. In this setup it is mainly used internally and does not mean that services are publicly exposed by default.
+
+CrowdSec adds another visibility and hardening layer around the proxy stack.
+
+Why it matters:
+
+- internal HTTPS access
+- centralized access paths for selected services
+- cleaner service URLs
+- additional security visibility through CrowdSec
+
+---
+
+## Sensitive Services
 
 ### Vaultwarden
 
-Vaultwarden is used as a self-hosted password manager.
+Vaultwarden is one of the most sensitive services in the environment because it contains password manager data.
 
-Because this service contains sensitive data, it is one of the most important services in the environment. It needs careful access control, reliable backups and a clear restore plan.
+For me, this means:
 
-Main considerations:
+- access should stay limited to trusted paths
+- AppData backups are critical
+- restore steps should be tested carefully
+- screenshots and logs must be handled carefully
 
-- Should only be reachable through trusted access paths
-- Must be included in AppData backup planning
-- Should not be exposed publicly without a clear reason
-- Should not appear in screenshots with sensitive information
-- Needs extra care during restore testing and migration
+Vaultwarden is high priority during restore planning, but it depends on the base infrastructure being available first.
 
 ---
 
 ## Smart Home Stack
 
-### Home Assistant
+Home Assistant is the central smart home service.
 
-Home Assistant is used as the central smart home platform.
+It uses Mosquitto as MQTT broker, Zigbee2MQTT for Zigbee devices and the Matter Server for Matter integration. These services belong together because Home Assistant loses a lot of functionality if the supporting services are missing.
 
-It connects smart home devices, automations and integrations. Since it is used regularly and controls parts of the smart home environment, it is treated as an important service.
+Main dependencies:
 
-Main purpose:
+| Service | Role |
+|---|---|
+| Home Assistant | Main smart home platform |
+| Mosquitto | MQTT broker |
+| Zigbee2MQTT | Zigbee device integration through MQTT |
+| Matter Server | Matter integration for Home Assistant |
 
-- Smart home automation
-- Device integration
-- Central control point for automations
-- Integration with MQTT, Zigbee and Matter components
-
-Backup relevance:
-
-- Configuration
-- Automations
-- Integrations
-- Add-on and service state where relevant
-
----
-
-### Mosquitto
-
-Mosquitto is used as the MQTT broker.
-
-It acts as a messaging layer for smart home components and is especially important for Zigbee2MQTT.
-
-Main purpose:
-
-- MQTT messaging
-- Communication layer for smart home services
-- Backend service for Zigbee2MQTT
-
----
-
-### Zigbee2MQTT
-
-Zigbee2MQTT is used to integrate Zigbee devices through MQTT.
-
-This keeps the Zigbee setup flexible and makes devices available to Home Assistant through the MQTT broker.
-
-Main purpose:
-
-- Zigbee device integration
-- MQTT-based communication
-- Smart home device management
-- Separation from vendor-specific bridges where possible
-
----
-
-### Matter Server
-
-The Matter Server is used for Matter integration with Home Assistant.
-
-Main purpose:
-
-- Matter device integration
-- Support for newer smart home standards
-- Home Assistant integration
+Backup-relevant data includes Home Assistant configuration, automations, integrations and the persistent state of the supporting services.
 
 ---
 
 ## Photo Management
 
-### Immich Stack
-
 Immich is used for self-hosted photo management.
 
-The Immich stack includes backend services such as PostgreSQL and Redis. Because it stores personal photos, it is included in backup planning.
+It is more than just one container. The photo library, database and supporting backend services belong together.
 
-Main purpose:
+Main dependencies:
 
-- Self-hosted photo management
-- Personal photo storage
-- Mobile photo backup workflow
-- Backend services with persistent data
+| Component | Role |
+|---|---|
+| Immich | Photo management application |
+| PostgreSQL | Application database |
+| Redis | Cache / supporting backend service |
+| Photo library | Actual user data |
 
-Backup relevance:
-
-- Photo library
-- Database
-- Application configuration
-- Supporting backend data
-
-Personal photo content and private paths are intentionally not documented in detail.
+Because it stores personal photos, Immich is part of the backup planning. Restoring the container without its database and photo library would not be useful.
 
 ---
 
 ## Network Visibility
 
-### WatchYourLAN
-
 WatchYourLAN is used for basic LAN visibility.
 
-It helps keep track of devices in the network and gives a simple overview of what is connected. This is useful in a segmented network because it helps me notice new or unexpected devices more easily.
+It helps me notice new or unexpected devices and gives a quick overview of what is connected. This is especially useful now that the network is split into multiple zones.
 
-Main purpose:
-
-- LAN device discovery
-- Basic network inventory
-- Visibility into connected devices
-
-This is not meant to be a full monitoring solution, but it is useful for a homelab environment.
+It is not meant to be a full monitoring stack, but it is useful enough for a homelab.
 
 ---
 
-## Knowledge and Documentation Services
+## Knowledge and Documentation
 
-### Kiwix
+Kiwix and Joplin are used for local knowledge and documentation.
 
-Kiwix is used for offline knowledge access.
-
-Main purpose:
-
-- Offline documentation and knowledge resources
-- Local access to selected content
-- Useful reference material even without internet access
-
----
-
-### Joplin
-
-Joplin is used as a notes and documentation service.
-
-Main purpose:
-
-- Notes
-- Documentation
-- Personal knowledge management
-- Project notes and technical write-ups
-
----
-
-## Database and Backend Services
-
-Some services require backend databases or supporting services.
-
-| Service | Purpose |
+| Service | Use case |
 |---|---|
-| PostgreSQL | Database backend for selected applications |
-| Redis | Cache/backend service for selected applications |
+| Kiwix | Offline knowledge and reference material |
+| Joplin | Notes, documentation and project write-ups |
 
-These services are important because they often contain application state. Even if they are not always accessed directly, they need to be included in AppData and backup planning.
-
----
-
-## Access Model
-
-The services are private by default.
-
-The general access model is:
-
-- Local trusted clients access selected internal services
-- Remote access is handled through VPN
-- Internal DNS is used for clean service names
-- Nginx Proxy Manager is used for selected internal access paths
-- Services are not exposed publicly by default
-- Firewall rules and VLANs restrict access between network zones
-
-Exact access paths, internal hostnames, IP addresses and firewall rule names are intentionally not published.
-
-More details:
-
-- [Security Concept](security-concept.md)
-- [Network Segmentation](network-roadmap.md)
+These services are not as critical as DNS, Vaultwarden or Home Assistant, but they are still useful during troubleshooting and documentation work.
 
 ---
 
-## Backup Relevance
+## Restore Priority
 
-Not every service has the same backup priority.
+If the server had to be rebuilt, I would not restore every service in a random order.
 
-| Priority | Services / Data | Reason |
-|---|---|---|
-| High | Vaultwarden | Contains sensitive password manager data |
-| High | Home Assistant | Important smart home configuration and automations |
-| High | AdGuard Home / Unbound | Important for internal DNS and service access |
-| High | Nginx Proxy Manager | Important for internal reverse proxy configuration |
-| High | Immich stack | Personal photos and application database |
-| Medium | Joplin | Notes and documentation |
-| Medium | WatchYourLAN | Useful network visibility data |
-| Medium | Kiwix | Useful but mostly reproducible content |
-| Depends | Lab or test services | Only backed up if the data is important |
-
-AppData backups are important because they contain the configuration and state of many of these services.
-
-More details: [Backup Strategy](backup-strategy.md)
-
----
-
-## Restore-Relevant Services
-
-Some services are more important during a restore than others.
-
-A rough restore priority would be:
+A rough restore order would be:
 
 1. DNS services
 2. Reverse proxy
 3. Vaultwarden
 4. Home Assistant
 5. Mosquitto and Zigbee2MQTT
-6. Immich stack
-7. Documentation and supporting services
+6. Immich stack including database and photo library
+7. Documentation and knowledge services
 8. Optional or experimental services
 
-This order is not final, but it helps me think about what needs to come back first after a failure.
+This order is not final, but it helps me think about dependencies. For example, DNS and reverse proxy services should come back early because many other services are easier to reach once they are running again.
 
 ---
 
-## Services Intentionally Not Documented in Detail
+## Services Not Documented in Detail
 
-Not every container or workload is documented in this repository.
+Not every container or workload belongs in this public documentation.
 
-Some services are left out intentionally because they are:
+Some services are left out because they are personal, temporary, experimental, not useful for the infrastructure focus or simply too sensitive to document publicly.
 
-- Personal
-- Temporary
-- Experimental
-- Not relevant for the infrastructure focus
-- Not useful for a public portfolio
-- Too sensitive to document publicly
-
-The goal of this repository is to document the infrastructure design and operational thinking, not to publish a full private service inventory.
+The point of this repository is not to publish a full private service inventory. It is meant to show how the main infrastructure pieces fit together and how I think about access, persistence and backups.
 
 ---
 
-## Operational Notes
+## Operating Notes
 
-General service operation principles:
+A few rules I try to follow when adding or changing services:
 
-- Persistent data should be stored outside the container itself.
-- Important service data should be covered by AppData backups.
-- Services should not be exposed publicly by default.
-- Internal access should use DNS and reverse proxying where useful.
-- Sensitive services should not be shown in screenshots with real data.
-- Test services should be separated from critical services where possible.
-- New services should be reviewed for backup and access requirements.
-- Public documentation should stay sanitized.
+- keep persistent data outside the container itself
+- check whether the service needs AppData or share-level backups
+- expose only the ports that are actually required
+- use internal DNS and reverse proxying where it makes access cleaner
+- keep test services separated from important services where possible
+- document dependencies before the service becomes hard to replace
 
----
+For detailed access rules and backup planning, I use the dedicated documents:
 
-## Current Limitations
-
-The service stack is running, but there are still areas to improve.
-
-Current limitations and improvement areas:
-
-- Restore procedures should be documented better.
-- Monitoring and alerting can be improved.
-- Some service dependencies should be documented more clearly.
-- Backup coverage should be reviewed when new services are added.
-- More sanitized screenshots can be added later.
-
----
-
-## Summary
-
-The service stack is built around practical homelab needs:
-
-- DNS and internal service access
-- Reverse proxying
-- Password management
-- Smart home infrastructure
-- Photo management
-- Basic network visibility
-- Local documentation and knowledge management
-- Backend services with persistent data
-
-The important part is not only that these services are running. The important part is that their access paths, dependencies, persistent data and backup requirements are understood and documented.
+- [Security Concept](security-concept.md)
+- [Backup Strategy](backup-strategy.md)
+- [Network Segmentation](network-roadmap.md)
