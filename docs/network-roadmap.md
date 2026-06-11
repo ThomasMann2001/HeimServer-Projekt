@@ -1,35 +1,34 @@
 # Network Segmentation
 
-This document describes the current UniFi-based network segmentation of my homelab.
+This document describes the current UniFi-based network setup of my homelab.
 
-The network has been migrated from a mostly flat home network to a segmented setup with a UniFi gateway/firewall, managed switching, VLAN-based separation and firewall rules.
+The network started as a mostly flat home network. I moved it to a segmented setup with a UniFi gateway/firewall, managed switches, separate network zones and firewall rules between them.
 
-Exact VLAN IDs, IP ranges, internal hostnames and detailed firewall rule names are intentionally not published in this repository.
+The exact internal details are intentionally kept out of the public repository. The important part here is the design and the reasoning behind it.
 
 ---
 
-## Current State
+## Current Setup
 
-Remote access is handled through VPN, so internal services do not need to be exposed directly to the public internet. Internal DNS and reverse proxying are used for cleaner access to local services.
+The current network is built around a UniFi Cloud Gateway Fiber. It handles routing, firewall rules, IDS/IPS and network management.
 
-Current state in short:
+Remote access is handled through VPN. Internal services are not exposed directly to the public internet by default. For local access I use internal DNS and reverse proxying where it makes sense.
 
-- UniFi gateway/firewall implemented
-- VLAN segmentation implemented
-- Firewall rules between network zones implemented
-- IDS/IPS enabled on the UniFi gateway as an additional visibility and protection layer
-- Unraid server connected directly to the gateway
-- VPN-first remote access
-- Internal DNS through AdGuard Home / Unbound
-- Internal reverse proxy through Nginx Proxy Manager
-- Managed Wi-Fi through a U6+ access point
-- 2.5G switching infrastructure with a 10G uplink between gateway and main switch
+Current state:
+
+- UniFi gateway/firewall is implemented
+- network segmentation is implemented
+- firewall rules between network zones are implemented
+- IDS/IPS is enabled on the UniFi gateway
+- Unraid server is connected directly to the gateway
+- U6+ access point is connected directly to the gateway via PoE
+- main switch is connected to the gateway with a 10G uplink
+- internal DNS is handled through AdGuard Home and Unbound
+- selected internal access paths use Nginx Proxy Manager
 
 ---
 
 ## UniFi Network Setup
-
-The network uses UniFi hardware as the main gateway, firewall and switching layer.
 
 | Component | Role |
 |---|---|
@@ -39,7 +38,7 @@ The network uses UniFi hardware as the main gateway, firewall and switching laye
 | USW Flex Mini 2.5G | Additional 2.5G switch for wired clients |
 | U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
 
-The Unraid server is connected directly to the UniFi Cloud Gateway Fiber. The main switch is connected to the gateway through a 10G uplink. The U6+ access point is also connected directly to the gateway via PoE, while additional wired clients are connected through the 2.5G switch infrastructure.
+The Unraid server is connected directly to the gateway. The main switch uses a 10G uplink to the gateway. The U6+ access point is also connected directly to the gateway via PoE.
 
 ---
 
@@ -70,23 +69,23 @@ flowchart TD
 
 ## Network Zones
 
-The network is segmented into multiple zones to separate trusted devices, servers, IoT devices, guest access and lab workloads.
+I split the network into different zones so that not every device has the same level of trust.
 
-| Zone | Purpose | Access Concept |
+| Zone | Purpose | Access idea |
 |---|---|---|
-| Default / Native | Compatibility and transition network | Kept minimal where possible |
+| Default / Native | Compatibility and transition network | Kept as small as practical |
 | Management | Network and admin devices | Access to management interfaces |
 | Trusted | Main trusted clients and daily-use devices | Access to selected internal services |
-| Untrusted | Less trusted client devices | Restricted access to selected services only |
+| Untrusted | Less trusted client devices | Restricted access to selected services |
 | Server | Unraid and infrastructure services | Access only from allowed networks |
 | Media | Media and TV devices | Limited access to required media services |
-| IoT | Smart home and IoT devices | Limited access to Home Assistant/MQTT where required |
+| IoT | Smart home and IoT devices | Limited access where Home Assistant, MQTT or device control requires it |
 | Guest | Guest devices | Internet-only access |
-| Lab | Testing and lab devices | Separated from production services where possible |
+| Lab | Testing and lab devices | Separated from normal productive services |
 | Print | Printer devices | Only required printing-related access |
 | VPN | Remote access | Access to selected internal services |
 
-The goal is not to make the network unnecessarily complex. The goal is to reduce unnecessary trust between devices and make access rules easier to understand and maintain.
+I try to keep the network simple enough to maintain, while still separating devices that should not fully trust each other.
 
 ---
 
@@ -131,114 +130,56 @@ flowchart LR
 
 ---
 
-## Firewall Direction
+## Firewall Approach
 
-The firewall rules follow a simple principle:
+The firewall rules are based on a simple idea: allow the traffic that is required and block unnecessary lateral movement.
 
-> Allow only what is needed between networks and block unnecessary lateral movement.
+Current direction:
 
-Implemented direction:
+- management devices can access required management interfaces
+- trusted clients can access selected internal services
+- VPN clients can access selected internal services
+- server services are not reachable from every network by default
+- IoT devices are limited to required smart home communication
+- media devices only get the access they need
+- printer access is limited to printing-related traffic
+- guest devices are intended for internet-only access
+- lab devices are separated from normal productive services where possible
+- untrusted devices are not treated like trusted clients
 
-- Management devices can access required management interfaces.
-- Trusted clients can access selected internal services.
-- VPN clients can access selected internal services.
-- Server services are not reachable from every network by default.
-- IoT devices are restricted to required smart home communication.
-- Media devices only receive the access they require.
-- Printer access is limited to required printing-related traffic.
-- Guest devices are intended for internet-only access.
-- Lab devices are separated from normal production services where possible.
-- Untrusted devices have restricted access and are not treated like trusted clients.
+When I add an exception, I want to be able to understand later why it exists. That is the main reason I document the rule direction instead of just relying on the UniFi UI.
 
 ---
 
 ## Gateway Security
 
-The UniFi gateway is used not only for routing and firewall rules, but also as an additional security and visibility layer.
+IDS/IPS is enabled on the UniFi gateway.
 
-IDS/IPS is enabled on the gateway. I treat it as an additional layer, not as a replacement for proper segmentation, updates, backups or careful service exposure.
+I use it as an additional visibility layer, not as a replacement for segmentation, updates, backups or careful service exposure. The setup should still work securely even without relying on IDS/IPS as the only protection mechanism.
 
-The main security idea is:
+What I use it for:
 
-- keep internal services private by default
-- use VPN for remote access
-- limit traffic between network zones
-- monitor suspicious traffic where possible
-- document exceptions instead of letting the network grow uncontrolled
+- spotting suspicious traffic
+- getting additional visibility into network activity
+- reviewing alerts when something looks unusual
+- learning how the network behaves over time
 
-This is still a homelab, so the goal is not to claim an enterprise-grade security setup. The goal is to build a practical, understandable and maintainable network that improves over time.
-
----
-
-## Operational Notes
-
-The rules are documented at a high level in this public repository. Exact VLAN IDs, IP ranges, internal hostnames and detailed rule names are intentionally not published.
-
-Things I want to keep documented over time:
-
-- Which zones are allowed to access which services
-- Which services require exceptions
-- Which ports are needed for internal services
-- Which rules are temporary and should be cleaned up later
-- How the firewall design changes when new services are added
-- How DNS and reverse proxying interact with the segmented network
-- Which alerts or findings from IDS/IPS require further review
+This is still a homelab, so I try to keep the setup realistic and maintainable instead of pretending it is an enterprise SOC.
 
 ---
 
-## Security Considerations
+## Notes and Open Points
 
-The network segmentation is one part of the overall security concept.
+The network is already segmented and usable, but I still want to improve the documentation around it.
 
-Important points:
+Things I want to keep track of:
 
-- Internal services are private by default.
-- Remote access uses VPN instead of direct public exposure.
-- Guest and untrusted devices are separated from trusted clients.
-- IoT devices are separated from normal client devices.
-- Printer devices are isolated as much as practical.
-- Lab workloads are separated from productive services where possible.
-- Management access is limited to trusted/admin paths.
-- IDS/IPS is enabled on the gateway as an additional visibility and protection layer.
-- Public documentation is sanitized and does not include sensitive internal details.
+- which zones are allowed to access which services
+- which services require exceptions
+- which ports are actually needed
+- which rules were only created for testing
+- how DNS and reverse proxying interact with the segmented network
+- IDS/IPS findings that are worth reviewing
+- troubleshooting notes, for example printer discovery or IoT access issues
 
 More details: [Security Concept](security-concept.md)
-
----
-
-## Current Limitations
-
-The core segmentation is implemented, but the network is still evolving.
-
-Current limitations and improvement areas:
-
-- Firewall exceptions should be reviewed over time.
-- Required ports and access paths should be documented better.
-- Monitoring and alerting for network-related issues can be improved.
-- IDS/IPS findings should be reviewed and documented where useful.
-- More sanitized screenshots can be added later.
-- DNS and reverse proxy documentation should stay aligned with the VLAN design.
-
----
-
-## Future Improvements
-
-Planned improvements:
-
-- Keep firewall rules documented
-- Review required network exceptions over time
-- Add monitoring/alerting for network issues
-- Review IDS/IPS findings and tune the setup if needed
-- Add more sanitized screenshots once they are safe to publish
-- Keep DNS and reverse proxy documentation aligned with the VLAN design
-- Document important troubleshooting cases, for example printer discovery or IoT access issues
-
----
-
-## Summary
-
-The network is now segmented through UniFi VLANs and firewall rules.
-
-The goal is to keep the homelab understandable and maintainable while reducing unnecessary trust between clients, servers, IoT devices, media devices, printers, lab systems and guest/untrusted devices.
-
-IDS/IPS on the gateway adds another layer of visibility, but the main focus remains on clean segmentation, private-by-default services, VPN-based remote access and clear documentation.
