@@ -41,6 +41,7 @@ The main focus areas are:
 | Private data disk | Implemented with a dedicated 4 TB disk |
 | UniFi gateway/firewall | Implemented |
 | VLAN segmentation | Implemented |
+| Gateway IDS/IPS | Enabled on the UniFi gateway |
 | Firewall rules | Implemented between network zones |
 | Offsite backup | Planned |
 
@@ -216,7 +217,7 @@ Current network components:
 
 | Component | Role |
 |---|---|
-| UniFi Cloud Gateway Fiber | Gateway, firewall and network controller |
+| UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS and network controller |
 | U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
 | USW Flex 2.5G 8 | Main 2.5G switch, connected to the gateway with a 10G uplink |
 | USW Flex 2.5G 5 | Additional 2.5G switch for wired clients |
