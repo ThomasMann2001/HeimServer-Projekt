@@ -1,46 +1,53 @@
 # Architecture
 
-This document gives an overview of my current Unraid homelab architecture and the direction I want to take it in.
+This document describes the current architecture of my Unraid-based homelab.
 
-The setup is used as a practical learning environment for system administration, self-hosting, backups, internal DNS, reverse proxying and security-focused network design. It is not meant to be a finished enterprise setup, but a homelab that is continuously improved while running real services.
+The system is built around Unraid as the central storage and container platform. It runs infrastructure services, selected self-hosted applications and smart home components. The network is based on UniFi hardware with VLAN segmentation and firewall rules.
 
-## High-Level Overview
+---
 
-The homelab is built around one Unraid server. It provides storage, runs my Docker-based services and gives me a place to test new tools and concepts.
+## Goals
 
-Main responsibilities of the system:
+The main goals of this architecture are:
 
-- Storage management with Unraid
-- Planned parity protection for the array
-- Docker-based service hosting
-- Internal DNS and service discovery
-- Internal HTTPS access through a reverse proxy
-- Smart home infrastructure
-- Local backup targets
-- VPN-first remote access
-- Future firewall and VLAN-based network segmentation
+- Keep the environment understandable and maintainable
+- Separate storage, application data, backups and lab workloads
+- Keep services private by default
+- Use VPN-first remote access instead of exposing services directly
+- Use internal DNS and reverse proxying for clean access to services
+- Segment the network into different trust zones
+- Document decisions, limitations and future improvements
 
-## Current Architecture
+---
+
+## High-Level Architecture
 
 ```mermaid
 flowchart TD
     Internet((Internet))
-    Fritzbox["FRITZ!Box / Current Router"]
-    Switch["Local Network / Managed Switch"]
-    Clients["Local Clients"]
+    UCG["UniFi Cloud Gateway Fiber<br>Gateway / Firewall"]
+    Flex8["USW Flex 2.5G 8<br>Main Switch"]
+    Flex5["USW Flex 2.5G 5<br>Additional Switch"]
+    AP["U6+ Access Point"]
     Unraid["Unraid Server"]
+    WiredClients["Wired Clients"]
+    WiFiClients["Wi-Fi / IoT Devices"]
 
-    Internet --> Fritzbox
-    Fritzbox --> Switch
-    Switch --> Clients
-    Switch --> Unraid
+    Internet --> UCG
+    UCG -->|"10G uplink"| Flex8
+    UCG -->|"PoE"| AP
+    Flex8 --> Unraid
+    Flex8 --> Flex5
+    Flex8 --> WiredClients
+    Flex5 --> WiredClients
+    AP --> WiFiClients
 
     subgraph UnraidHost["Unraid Host"]
         Docker["Docker Engine"]
-        Cache["NVMe SSD - AppData / Cache"]
-        ArrayStorage["Unraid Array - Data Storage"]
+        Cache["NVMe SSD<br>AppData / Cache"]
+        ArrayStorage["Unraid Array<br>Data Storage"]
         BackupDisk["Dedicated Backup Disk"]
-        LabSSD["SATA SSD - VMs / Lab"]
+        LabSSD["SATA SSD<br>VMs / Lab"]
     end
 
     Unraid --> Docker
@@ -48,181 +55,168 @@ flowchart TD
     Unraid --> ArrayStorage
     Unraid --> BackupDisk
     Unraid --> LabSSD
-
-    subgraph CoreServices["Containerized Services"]
-        DNS["AdGuard Home + Unbound"]
-        Proxy["Nginx Proxy Manager + CrowdSec"]
-        Vault["Vaultwarden"]
-        HomeAssistant["Home Assistant"]
-        MQTT["Mosquitto"]
-        Zigbee["Zigbee2MQTT"]
-        Matter["Matter Server"]
-        Immich["Immich Stack"]
-        Watch["WatchYourLAN"]
-    end
-
-    Docker --> DNS
-    Docker --> Proxy
-    Docker --> Vault
-    Docker --> HomeAssistant
-    Docker --> MQTT
-    Docker --> Zigbee
-    Docker --> Matter
-    Docker --> Immich
-    Docker --> Watch
-
-    DNS --> Proxy
-    Proxy --> Vault
-    Proxy --> HomeAssistant
-    Proxy --> Immich
 ```
 
-## Component Roles
+---
+
+## Main Components
 
 | Component | Role |
 |---|---|
-| FRITZ!Box | Current router, internet gateway and VPN endpoint |
-| Managed Switch | Connects wired devices such as the Unraid server and local clients |
-| Unraid Server | Central storage and container host |
-| Docker | Runs the self-hosted services |
-| NVMe SSD | AppData, Docker data and cache workloads |
-| Unraid Array | Main storage for persistent data, with parity protection planned |
-| Backup Disk | Local backup target for selected shares and AppData backups |
-| SATA SSD | Virtual machines, testing and experimental workloads |
-| AdGuard Home + Unbound | Internal DNS, filtering and DNS resolution |
-| Nginx Proxy Manager + CrowdSec | Internal reverse proxy and additional security layer |
-| Vaultwarden | Self-hosted password management |
-| Home Assistant Stack | Smart home automation and device integration |
-| Immich Stack | Self-hosted photo management |
-| WatchYourLAN | LAN device visibility and basic network inventory |
+| Unraid server | Central storage, Docker and lab host |
+| UniFi Cloud Gateway Fiber | Gateway, firewall and network controller |
+| USW Flex 2.5G 8 | Main 2.5G switch, connected to the gateway with a 10G uplink |
+| USW Flex 2.5G 5 | Additional 2.5G switch for wired clients |
+| U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
+| AdGuard Home / Unbound | Internal DNS, filtering and upstream DNS resolution |
+| Nginx Proxy Manager | Internal reverse proxy and HTTPS access |
+| CrowdSec | Additional security and visibility component |
+| Docker | Container platform for infrastructure and application services |
+| Unraid array | Long-term data storage with parity protection |
+| NVMe cache | AppData, Docker data and cache workloads |
+| Dedicated backup disk | Local backup target |
+| SATA SSD | Virtual machines, testing and lab workloads |
 
-## Service Access Model
+---
 
-The environment currently follows a VPN-first approach.
+## Access Model
 
-Internal services are mainly accessed from inside the local network or through VPN. I try to avoid exposing services directly to the public internet unless there is a clear reason and proper protection in place.
+The access model is based on keeping services private by default.
 
-| Access Type | Status | Notes |
-|---|---|---|
-| Local LAN access | Implemented | Used for normal internal access |
-| VPN access | Implemented | Preferred method for remote access |
-| Public port exposure | Avoided | Services are not exposed publicly by default |
-| Reverse proxy | Implemented internally | Used for clean internal HTTPS and service routing |
-| UniFi firewalling | Planned | Future gateway, firewall and VLAN design |
+Remote access is handled through VPN. Internal services are not exposed directly to the public internet by default. Internal DNS and reverse proxying are used to make services easier to access inside the network.
 
-## Internal DNS and HTTPS
-
-Internal DNS is handled by AdGuard Home and Unbound. This allows me to access services through readable internal hostnames instead of remembering IP addresses and ports.
-
-Nginx Proxy Manager is used as the reverse proxy layer. It provides a cleaner access structure for internal services and helps centralize HTTPS routing.
-
-Benefits of this approach:
-
-- Services can be reached through readable hostnames
-- Reverse proxy configuration is managed in one place
-- Fewer direct port-based access URLs are needed
-- Internal services are easier to organize
-- The setup is prepared for future access-control improvements
-
-## Container Architecture
-
-Most services are running as Docker containers. This makes the setup easier to maintain, move and back up.
-
-My main container design principles:
-
-- Persistent data is stored outside the container itself
-- AppData is separated from container images
-- Databases are kept persistent
-- Important service state can be restored from AppData backups
-- Test services and lab workloads should be separated from critical services where possible
-
-## Backup-Relevant Architecture
-
-The storage layout separates active application data, productive data and backup targets.
-
-Backup-relevant design choices:
-
-- AppData is stored on the NVMe SSD
-- AppData is backed up separately because it contains service configuration and application state
-- Important shares are backed up through scheduled backup jobs
-- The backup share is restricted to the required disk
-- Offsite backup is planned to complete the 3-2-1 strategy
-- Array parity is planned with an 8 TB or larger parity disk
-
-The current backup approach already covers local backups. The next major improvement is an offsite backup target for important data.
-
-## Planned UniFi Architecture
-
-A future network upgrade is planned with a UniFi Cloud Gateway Fibre and a U7 Lite access point.
-
-The UniFi Cloud Gateway Fibre will act as the central gateway and firewall. A managed switch will connect wired devices such as the Unraid server, while the U7 Lite access point will provide managed Wi-Fi.
-
-```mermaid
-flowchart TD
-    Internet2((Internet))
-    UCG["UniFi Cloud Gateway Fibre<br>Gateway / Firewall"]
-    Switch2["Managed Switch"]
-    Unraid2["Unraid Server"]
-    AP["U7 Lite Access Point"]
-    WiredClients["Wired Clients"]
-    WiFiClients["Wi-Fi Clients / IoT Devices"]
-
-    Internet2 --> UCG
-    UCG --> Switch2
-    Switch2 --> Unraid2
-    Switch2 --> AP
-    Switch2 --> WiredClients
-    AP --> WiFiClients
-```
-
-## Planned VLAN Design
-
-The planned VLAN design separates trusted clients, server workloads, IoT devices and guest access.
-
-This is the security direction I want to move toward once the UniFi gateway and access point are in place.
+The general access model is:
 
 ```mermaid
 flowchart LR
-    UCG2["UniFi Cloud Gateway Fibre<br>Firewall Rules"]
+    VPN["VPN Clients"]
+    Trusted["Trusted Clients"]
+    Mgmt["Management Devices"]
+    IoT["IoT Devices"]
+    Guest["Guest Devices"]
+    Server["Server VLAN<br>Unraid / Services"]
 
-    TrustedLAN["Trusted LAN<br>Admin devices / main clients"]
-    ServerVLAN["Server VLAN<br>Unraid and infrastructure services"]
-    IoTVLAN["IoT VLAN<br>Smart home devices"]
-    GuestVLAN["Guest VLAN<br>Guest devices"]
-    VPN["VPN Access<br>Remote administration"]
-
-    UCG2 --> TrustedLAN
-    UCG2 --> ServerVLAN
-    UCG2 --> IoTVLAN
-    UCG2 --> GuestVLAN
-    UCG2 --> VPN
-
-    TrustedLAN -. allowed access .-> ServerVLAN
-    VPN -. allowed access .-> ServerVLAN
-    IoTVLAN -. limited access to Home Assistant / MQTT .-> ServerVLAN
-    GuestVLAN -. internet only .-> UCG2
+    VPN -->|"selected access"| Server
+    Trusted -->|"selected access"| Server
+    Mgmt -->|"management access"| Server
+    IoT -->|"limited access where required"| Server
+    Guest -. "internet-only / restricted" .-> Server
 ```
 
-## Planned Segmentation Goals
+---
 
-| Zone | Purpose | Access Concept |
-|---|---|---|
-| Trusted LAN | Main clients and admin devices | Access to selected internal services |
-| Server VLAN | Server and infrastructure services | Restricted inbound access |
-| IoT VLAN | Smart home and IoT devices | Only required access to Home Assistant/MQTT |
-| Guest VLAN | Guest devices | Internet-only access |
-| VPN | Remote access | Preferred access path for administration and services |
+## Network Zones
 
-## Design Summary
+The network is segmented into different VLANs. The goal is to reduce unnecessary trust between devices and only allow required traffic between zones.
 
-The main idea behind this architecture is to keep the setup understandable, maintainable and secure enough for a real homelab environment.
+| Zone | Purpose |
+|---|---|
+| Default / Native | Kept minimal for compatibility and transition purposes |
+| Management | Network and admin devices |
+| Trusted | Main trusted clients and daily-use devices |
+| Untrusted | Less trusted client devices with restricted internal access |
+| Server | Unraid and infrastructure services |
+| Media | Media and TV devices |
+| IoT | Smart home and IoT devices |
+| Guest | Guest devices with internet-only access |
+| Lab | Testing and lab devices |
+| Print | Printer devices |
+| VPN | Remote access to selected internal services |
 
-Important design points:
+Exact IP ranges, internal hostnames and detailed firewall rule names are intentionally not published in this repository.
 
-- Important data should be separated and backed up
-- Services should not be exposed publicly by default
-- VPN is the preferred remote access method
-- Internal DNS and reverse proxying make services easier to access
-- Container data should be restorable through AppData backups
-- The network should later be segmented with VLANs and firewall rules
-- Parity is planned for availability, but backups are still required
+---
+
+## Docker and Service Architecture
+
+Docker services are hosted on Unraid. Services are grouped by role and documented separately.
+
+Main service groups:
+
+- DNS and filtering
+- Reverse proxy and security
+- Password management
+- Smart home infrastructure
+- Photo management
+- Network visibility
+- Knowledge and documentation
+- Backend services
+
+The goal is not only to run services, but to understand their dependencies, access paths and backup requirements.
+
+More details: [Service Overview](service-overview.md)
+
+---
+
+## Storage Architecture
+
+The storage layout separates different workload types:
+
+| Storage Area | Purpose |
+|---|---|
+| NVMe SSD | Docker AppData, cache and frequently changing application data |
+| Unraid array | Main long-term data storage |
+| Parity disk | Protection against a single data disk failure |
+| Dedicated backup disk | Local backup target for selected data |
+| Private data disk | Private and important data |
+| SATA SSD | Virtual machines, tests and lab workloads |
+
+Parity is active, but it is not treated as a backup. Backups are handled separately.
+
+More details: [Storage Layout](storage-layout.md)
+
+---
+
+## Backup Architecture
+
+The backup concept separates AppData backups from share-level backups.
+
+Current backup layers:
+
+- AppData backup for container and service recovery
+- Weekly backups for photos and selected important data
+- Monthly backups for mostly static archive data
+- Dedicated local backup disk
+- Planned offsite backup for important data
+
+More details: [Backup Strategy](backup-strategy.md)
+
+---
+
+## Security Architecture
+
+The current security approach is based on several layers:
+
+- VPN-first remote access
+- No public exposure of internal services by default
+- Internal DNS through AdGuard Home and Unbound
+- Internal reverse proxying through Nginx Proxy Manager
+- CrowdSec as an additional security and visibility component
+- VLAN segmentation
+- Firewall rules between network zones
+- Separated backup target
+- Sanitized public documentation
+
+More details: [Security Concept](security-concept.md)
+
+---
+
+## Current Limitations
+
+The environment is operational, but not finished.
+
+Current limitations and improvement areas:
+
+- Offsite backup is still planned
+- Restore tests should be documented better
+- Monitoring and notifications for failed backup jobs should be improved
+- Firewall exceptions should be reviewed and documented over time
+- More sanitized screenshots and example configurations can be added later
+
+---
+
+## Summary
+
+This architecture is designed to be practical, understandable and maintainable.
+
+It is a real homelab environment that combines storage, Docker services, backups, VPN-first access, internal DNS, reverse proxying and UniFi-based network segmentation.
