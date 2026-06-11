@@ -10,12 +10,13 @@ Das Projekt dient als praxisnahe Lern- und Dokumentationsumgebung für Systemadm
 
 ---
 
-This repository documents my Unraid-based homelab.
+## Project Overview
 
-The setup is used as a practical learning environment for system administration, self-hosting, backups, internal DNS, reverse proxying, VPN-first remote access and network segmentation.
-It is not meant to look like a finished enterprise environment. It is a real homelab that I use, maintain and improve over time.
+This is my personal Unraid-based homelab. I use it to run and document storage, Docker services, internal infrastructure, backups, smart home components and a segmented UniFi network.
 
-The main focus areas are:
+It is a real environment that I use, maintain and improve over time.
+
+Main focus areas:
 
 - Unraid storage design
 - Docker-based services
@@ -24,6 +25,27 @@ The main focus areas are:
 - Internal DNS and reverse proxying
 - Smart home infrastructure
 - UniFi-based firewall and VLAN segmentation
+
+---
+
+## Privacy & Public Documentation
+
+This is a public portfolio repository. I leave out internal details that are not needed to understand the design.
+
+Not included in this repository:
+
+- exact VLAN IDs
+- internal IP ranges
+- internal hostnames and DNS rewrites
+- detailed firewall rule names
+- real share names with private information
+- secrets, tokens, certificates and private keys
+- private VPN configuration
+- screenshots with serial numbers, MAC addresses or sensitive device names
+
+The idea is to document the setup, decisions and learning process without publishing unnecessary internal details.
+
+---
 
 ---
 
@@ -41,8 +63,8 @@ The main focus areas are:
 | Private data disk | Implemented with a dedicated 4 TB disk |
 | UniFi gateway/firewall | Implemented |
 | VLAN segmentation | Implemented |
-| Gateway IDS/IPS | Enabled on the UniFi gateway |
 | Firewall rules | Implemented between network zones |
+| Gateway IDS/IPS | Enabled on the UniFi gateway |
 | Offsite backup | Planned |
 
 ---
@@ -67,9 +89,11 @@ The main focus areas are:
 
 The system is built in a compact Jonsbo N6 case with up to nine drive bays. It is used as my Unraid-based homelab for storage, Docker services, backups and lab workloads.
 
+---
+
 ## Storage Overview
 
-The storage layout is built around clear roles. Application data, user data, backups and lab workloads should not all live in the same place.
+I try to keep the storage layout easy to understand: application data, long-term data, backups, private data and lab workloads each have their own role.
 
 | Device | Model | Capacity | Purpose |
 |---|---:|---:|---|
@@ -110,7 +134,7 @@ The services are grouped by their role in the environment. Not every private, te
 | Knowledge and documentation | Kiwix, Joplin | Notes and offline/local knowledge resources |
 | Backend services | PostgreSQL, Redis | Databases and supporting services |
 
-The goal is not just to run many applications, but to understand their roles, dependencies, access paths and backup requirements.
+The important part for me is not just that the containers are running. I also want to understand their dependencies, access paths and backup requirements.
 
 More details: [Service Overview](docs/service-overview.md)
 
@@ -123,18 +147,18 @@ The current setup uses Unraid as the central storage and container host. Network
 ```mermaid
 flowchart TD
     Internet((Internet))
-    UCG["UniFi Cloud Gateway Fiber<br>Gateway / Firewall"]
-    Flex8["USW Flex 2.5G 8<br>Main Switch"]
-    Flex5["USW Flex 2.5G 5<br>Additional Switch"]
+    UCG["UniFi Cloud Gateway Fiber<br/>Gateway / Firewall / IDS/IPS"]
+    Flex8["USW Flex 2.5G 8<br/>Main Switch"]
+    Flex5["USW Flex 2.5G 5<br/>Additional Switch"]
     AP["U6+ Access Point"]
     Unraid["Unraid Server"]
     WiredClients["Wired Clients"]
     WiFiClients["Wi-Fi / IoT Devices"]
 
     Internet --> UCG
+    UCG -->|"direct connection"| Unraid
     UCG -->|"10G uplink"| Flex8
     UCG -->|"PoE"| AP
-    Flex8 --> Unraid
     Flex8 --> Flex5
     Flex8 --> WiredClients
     Flex5 --> WiredClients
@@ -195,10 +219,11 @@ Current measures:
 - UniFi gateway/firewall is implemented.
 - VLAN segmentation is implemented for different device groups.
 - Firewall rules are used to restrict traffic between network zones.
+- IDS/IPS is enabled on the UniFi gateway as an additional visibility layer.
 - Sensitive services such as Vaultwarden are treated as higher-priority services for backups and access control.
 - Backup targets are separated from normal productive storage.
 
-Remaining improvements:
+Open points I still want to improve:
 
 - Offsite backup for important data
 - Better restore documentation and restore testing
@@ -218,13 +243,12 @@ Current network components:
 | Component | Role |
 |---|---|
 | UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS and network controller |
+| Unraid server | Server and infrastructure services, connected directly to the gateway |
 | U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
 | USW Flex 2.5G 8 | Main 2.5G switch, connected to the gateway with a 10G uplink |
 | USW Flex 2.5G 5 | Additional 2.5G switch for wired clients |
-| Unraid server | Server and infrastructure services |
 
-The main switch is connected to the UniFi Cloud Gateway Fiber through a 10G uplink. 
-The U6+ access point is connected directly to the gateway via PoE, while the Unraid server and other wired devices are connected through the 2.5G switch infrastructure.
+The Unraid server is connected directly to the UniFi Cloud Gateway Fiber. The main switch is connected to the gateway through a 10G uplink. The U6+ access point is also connected directly to the gateway via PoE.
 
 Current network zones:
 
@@ -242,8 +266,7 @@ Current network zones:
 | Print | Printer devices |
 | VPN | Remote access to selected internal services |
 
-The VLANs are separated through firewall rules. The goal is to allow only required traffic between zones and reduce unnecessary lateral movement inside the network.
-Exact VLAN IDs, IP ranges, internal hostnames and detailed firewall rule names are intentionally not published in this repository.
+I try to keep the network simple enough to maintain, while still separating devices that should not fully trust each other.
 
 More details: [Network Roadmap](docs/network-roadmap.md)
 
@@ -259,7 +282,7 @@ The repository is split into several documentation files:
 | [Storage Layout](docs/storage-layout.md) | Storage roles, AppData/cache design, array layout and current disk layout |
 | [Backup Strategy](docs/backup-strategy.md) | AppData backup, weekly/monthly backups and 3-2-1 backup roadmap |
 | [Security Concept](docs/security-concept.md) | VPN-first access, internal DNS, reverse proxying and VLAN segmentation |
-| [Network Roadmap](docs/network-roadmap.md) | UniFi network design, VLANs and firewall direction |
+| [Network Roadmap](docs/network-roadmap.md) | UniFi network design, network zones and firewall direction |
 | [Service Overview](docs/service-overview.md) | Overview of the main infrastructure and application services |
 
 ---
