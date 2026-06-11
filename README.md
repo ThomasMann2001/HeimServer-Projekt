@@ -1,15 +1,19 @@
+# Unraid Homelab Infrastructure
+
 ## Kurzbeschreibung
 
 Dieses Repository dokumentiert mein privates Unraid-basiertes Homelab.
-Der Fokus liegt auf Storage-Design, Docker-Services, Backup-Strategie,
-internem DNS, Reverse Proxying, VPN-first Zugriff und einer geplanten
-VLAN-/Firewall-Segmentierung mit UniFi.
 
-# Unraid Homelab Infrastructure
+Der Fokus liegt auf Storage-Design, Docker-Services, Backup-Strategie, internem DNS, Reverse Proxying, VPN-first Zugriff sowie einer umgesetzten UniFi-basierten VLAN- und Firewall-Segmentierung.
+
+Das Projekt dient als praxisnahe Lern- und Dokumentationsumgebung für Systemadministration, Self-Hosting, Netzwerksicherheit, Backup-/Restore-Planung und den Betrieb eigener Infrastruktur.
+
+---
 
 This repository documents my Unraid-based homelab.
 
-The setup is used as a practical learning environment for system administration, self-hosting, backups, internal DNS, reverse proxying and security-focused network design. It is not meant to look like a finished enterprise environment. It is a real homelab that I use, maintain and improve over time.
+The setup is used as a practical learning environment for system administration, self-hosting, backups, internal DNS, reverse proxying, VPN-first remote access and network segmentation.
+It is not meant to look like a finished enterprise environment. It is a real homelab that I use, maintain and improve over time.
 
 The main focus areas are:
 
@@ -19,7 +23,7 @@ The main focus areas are:
 - VPN-first remote access
 - Internal DNS and reverse proxying
 - Smart home infrastructure
-- Planned UniFi-based firewall and VLAN segmentation
+- UniFi-based firewall and VLAN segmentation
 
 ---
 
@@ -33,10 +37,12 @@ The main focus areas are:
 | Internal reverse proxy | Implemented with Nginx Proxy Manager |
 | VPN-first remote access | Implemented |
 | Local backups | Implemented for AppData and selected shares |
+| Array parity | Implemented with an 8 TB parity disk |
+| Private data disk | Implemented with a dedicated 4 TB disk |
+| UniFi gateway/firewall | Implemented |
+| VLAN segmentation | Implemented |
+| Firewall rules | Implemented between network zones |
 | Offsite backup | Planned |
-| Array parity | Planned with an 8 TB or larger parity disk |
-| UniFi gateway/firewall | Planned |
-| VLAN segmentation | Planned |
 
 ---
 
@@ -49,8 +55,7 @@ The main focus areas are:
 | CPU | Intel Core i5-12500T |
 | Memory | 32 GiB DDR4 |
 | PSU | NZXT Core Gold 750 W |
-| M.2 PCIe SATA expansion adapter | 
-| Provides additional SATA ports for the Jonsbo N6 drive bays |
+| SATA Expansion | M.2 PCIe SATA expansion adapter for additional SATA ports |
 | Operating System | Unraid |
 
 ---
@@ -69,19 +74,21 @@ The storage layout is built around clear roles. Application data, user data, bac
 |---|---:|---:|---|
 | NVMe SSD | WD Red SN700 | 500 GB | AppData, Docker data and cache |
 | HDD | WDC WD80EFPX | 8 TB | Main data disk |
-| HDD | Planned parity disk | 8 TB or larger | Unraid parity protection |
+| HDD | Parity disk | 8 TB | Unraid parity protection |
 | HDD | WDC WD40EFRX | 4 TB | Local backup target |
-| HDD | Private data disk | 4 TB planned | Private and important data |
-| HDD | Additional data disk | 8 TB or larger planned | Future expansion if required |
+| HDD | Private data disk | 4 TB | Private and important data |
 | SATA SSD | Micron 1100 MTFDDAK256TBN | 256 GB | Virtual machines, testing and experiments |
 
 Important design notes:
 
 - The NVMe SSD is used for Docker AppData and cache workloads.
 - The Unraid array is used for long-term data storage.
+- Active parity protects the array against a single data disk failure.
+- Parity is not treated as a replacement for backups.
 - A dedicated 4 TB HDD is used as the local backup target.
-- Parity is planned, but not treated as a replacement for backups.
+- A separate 4 TB HDD is used for private and important data.
 - A separate SATA SSD is used for VMs and lab/testing workloads.
+- Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adapter.
 
 More details: [Storage Layout](docs/storage-layout.md)
 
@@ -110,20 +117,27 @@ More details: [Service Overview](docs/service-overview.md)
 
 ## Architecture
 
-The current setup is still based on a normal home network with a FRITZ!Box as router and gateway. The Unraid server is connected through the local network and hosts the main services.
+The current setup uses Unraid as the central storage and container host. Network access is handled through a UniFi-based setup with VLAN segmentation and firewall rules.
 
 ```mermaid
 flowchart TD
     Internet((Internet))
-    Fritzbox["FRITZ!Box / Current Router"]
-    Switch["Local Network / Managed Switch"]
-    Clients["Local Clients"]
+    UCG["UniFi Cloud Gateway Fiber<br>Gateway / Firewall"]
+    Flex8["USW Flex 2.5G 8<br>Main Switch"]
+    Flex5["USW Flex 2.5G 5<br>Additional Switch"]
+    AP["U6+ Access Point"]
     Unraid["Unraid Server"]
+    WiredClients["Wired Clients"]
+    WiFiClients["Wi-Fi / IoT Devices"]
 
-    Internet --> Fritzbox
-    Fritzbox --> Switch
-    Switch --> Clients
-    Switch --> Unraid
+    Internet --> UCG
+    UCG -->|"10G uplink"| Flex8
+    UCG -->|"PoE"| AP
+    Flex8 --> Unraid
+    Flex8 --> Flex5
+    Flex8 --> WiredClients
+    Flex5 --> WiredClients
+    AP --> WiFiClients
 
     subgraph UnraidHost["Unraid Host"]
         Docker["Docker Engine"]
@@ -138,28 +152,6 @@ flowchart TD
     Unraid --> ArrayStorage
     Unraid --> BackupDisk
     Unraid --> LabSSD
-
-    subgraph CoreServices["Main Services"]
-        DNS["AdGuard Home + Unbound"]
-        Proxy["Nginx Proxy Manager + CrowdSec"]
-        Vault["Vaultwarden"]
-        HomeAssistant["Home Assistant"]
-        MQTT["Mosquitto"]
-        Zigbee["Zigbee2MQTT"]
-        Matter["Matter Server"]
-        Immich["Immich Stack"]
-        Watch["WatchYourLAN"]
-    end
-
-    Docker --> DNS
-    Docker --> Proxy
-    Docker --> Vault
-    Docker --> HomeAssistant
-    Docker --> MQTT
-    Docker --> Zigbee
-    Docker --> Matter
-    Docker --> Immich
-    Docker --> Watch
 ```
 
 More details: [Architecture](docs/architecture.md)
@@ -181,7 +173,7 @@ The local backup disk is useful for quick restores, but it is not the final back
 
 Unraid parity and backups are treated as separate things:
 
-- Parity helps with disk availability once it is active.
+- Parity helps with disk availability and protects against a single data disk failure.
 - Backups protect against deletion, broken updates, corruption, misconfiguration and complete system loss.
 
 More details: [Backup Strategy](docs/backup-strategy.md)
@@ -190,54 +182,66 @@ More details: [Backup Strategy](docs/backup-strategy.md)
 
 ## Security Approach
 
-The current security approach is based on keeping services private by default and avoiding unnecessary public exposure.
+The current security approach is based on keeping services private by default, using VPN for remote access and separating devices through VLANs and firewall rules.
 
 Current measures:
 
-- VPN-first remote access is already implemented.
+- VPN-first remote access is implemented.
 - Internal services are not exposed publicly by default.
 - Internal DNS is handled through AdGuard Home and Unbound.
 - Nginx Proxy Manager is used as an internal reverse proxy.
 - CrowdSec is used as an additional security and visibility component.
+- UniFi gateway/firewall is implemented.
+- VLAN segmentation is implemented for different device groups.
+- Firewall rules are used to restrict traffic between network zones.
 - Sensitive services such as Vaultwarden are treated as higher-priority services for backups and access control.
 - Backup targets are separated from normal productive storage.
 
-Planned improvements:
+Remaining improvements:
 
-- UniFi Cloud Gateway Fibre as gateway/firewall
-- U7 Lite access point for managed Wi-Fi
-- VLAN separation for trusted clients, servers, IoT devices and guests
-- Firewall rules between network zones
 - Offsite backup for important data
-- Better restore documentation and monitoring
+- Better restore documentation and restore testing
+- Monitoring/notifications for failed backup jobs
+- Ongoing cleanup and documentation of network exceptions
 
 More details: [Security Concept](docs/security-concept.md)
 
 ---
 
-## Planned Network Roadmap
+## Network Segmentation
 
-The current network works, but it is still mostly flat. The next step is to move toward a more structured network design with UniFi, VLANs and firewall rules.
+The network has been migrated from a mostly flat home network to a UniFi-based setup with VLAN segmentation and firewall rules.
 
-Planned hardware:
+Current network components:
 
-| Component | Planned Role |
+| Component | Role |
 |---|---|
-| UniFi Cloud Gateway Fibre | Gateway, firewall and network controller |
-| U7 Lite | Managed Wi-Fi access point |
-| Managed switch | Wired network distribution and VLAN transport |
+| UniFi Cloud Gateway Fiber | Gateway, firewall and network controller |
+| U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
+| USW Flex 2.5G 8 | Main 2.5G switch, connected to the gateway with a 10G uplink |
+| USW Flex 2.5G 5 | Additional 2.5G switch for wired clients |
+| Unraid server | Server and infrastructure services |
 
-Planned network zones:
+The main switch is connected to the UniFi Cloud Gateway Fiber through a 10G uplink. 
+The U6+ access point is connected directly to the gateway via PoE, while the Unraid server and other wired devices are connected through the 2.5G switch infrastructure.
 
-| Zone | Purpose |
-|---|---|
-| Trusted LAN | Main clients and admin devices |
-| Server VLAN | Unraid and infrastructure services |
-| IoT VLAN | Smart home and IoT devices |
-| Guest VLAN | Guest devices with internet-only access |
-| VPN | Remote access to selected internal services |
+Current network zones:
 
-The goal is not to make the network unnecessarily complex. The goal is to reduce unnecessary trust between devices and make access rules easier to understand and maintain.
+| Zone | VLAN ID | Purpose |
+|---|---:|---|
+| Default | 1 | Default/native network, kept minimal for compatibility and transition purposes |
+| Management | 10 | Network and admin devices |
+| Trusted | 20 | Main trusted clients and daily-use devices |
+| Untrusted | 25 | Less trusted client devices with restricted internal access |
+| Server | 30 | Unraid and infrastructure services |
+| Media | 40 | Media and TV devices |
+| IoT | 50 | Smart home and IoT devices |
+| Guest | 60 | Guest devices with internet-only access |
+| Lab | 70 | Testing and lab devices |
+| Print | 80 | Printer devices |
+| VPN | - | Remote access to selected internal services |
+
+The VLANs are separated through firewall rules. The goal is to allow only required traffic between zones and reduce unnecessary lateral movement inside the network.
 
 More details: [Network Roadmap](docs/network-roadmap.md)
 
@@ -249,11 +253,11 @@ The repository is split into several documentation files:
 
 | Document | Description |
 |---|---|
-| [Architecture](docs/architecture.md) | Current Unraid architecture, access model and planned UniFi design |
-| [Storage Layout](docs/storage-layout.md) | Storage roles, AppData/cache design, array layout and future expansion |
+| [Architecture](docs/architecture.md) | Current Unraid architecture, access model and UniFi network design |
+| [Storage Layout](docs/storage-layout.md) | Storage roles, AppData/cache design, array layout and current disk layout |
 | [Backup Strategy](docs/backup-strategy.md) | AppData backup, weekly/monthly backups and 3-2-1 backup roadmap |
-| [Security Concept](docs/security-concept.md) | VPN-first access, internal DNS, reverse proxying and planned segmentation |
-| [Network Roadmap](docs/network-roadmap.md) | Planned UniFi migration, VLAN design and firewall direction |
+| [Security Concept](docs/security-concept.md) | VPN-first access, internal DNS, reverse proxying and VLAN segmentation |
+| [Network Roadmap](docs/network-roadmap.md) | UniFi network design, VLANs and firewall direction |
 | [Service Overview](docs/service-overview.md) | Overview of the main infrastructure and application services |
 
 ---
@@ -262,17 +266,17 @@ The repository is split into several documentation files:
 
 | Status | Item |
 |---|---|
-| In progress | Prepare storage layout for parity and future expansion |
-| Planned | Add 8 TB or larger parity disk |
-| Planned | Add private data disk after parity is active |
-| Planned | Add additional 8 TB or larger data disk if capacity is needed |
-| Planned | Implement UniFi Cloud Gateway Fibre |
-| Planned | Add U7 Lite access point |
-| Planned | Design VLANs and firewall rules |
+| Done | Add 8 TB parity disk |
+| Done | Add dedicated 4 TB private data disk |
+| Done | Implement UniFi gateway/firewall |
+| Done | Create VLAN segmentation |
+| Done | Add firewall rules between network zones |
+| Done | Document core network zones and access concept |
+| In progress | Keep storage, backup and network documentation up to date |
 | Planned | Add offsite backup target |
 | Planned | Document restore tests |
-| Planned | Add sanitized screenshots |
-| Planned | Add sanitized example backup scripts |
+| Planned | Add monitoring/notifications for failed backup jobs |
+| Planned | Add more sanitized screenshots and example configurations |
 
 ---
 
@@ -280,14 +284,4 @@ The repository is split into several documentation files:
 
 This repository is intended as a technical portfolio and documentation project.
 
-It focuses on how the environment is planned, operated and improved over time. It does not include every private workload or every temporary test container.
-
-Before publishing screenshots or configuration examples, sensitive information must be removed, including:
-
-- Public IP addresses
-- Tokens and secrets
-- Serial numbers
-- MAC addresses
-- Passwords
-- Private file paths
-- Internal details that do not need to be public
+It focuses on how the environment is planned, operated and improved over time. Private workloads, secrets and sensitive configuration details are intentionally not included.
