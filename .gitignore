@@ -34,3 +34,16 @@ diagnostics/
 config/
 super.dat
 *.cfg
+
+# Datenbank-Files
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker Overrides
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# IDE / Editor Konfigurationen
+.vscode/
+.idea/
