@@ -18,6 +18,7 @@ Some personal, temporary or experimental containers are intentionally left out.
 | Smart home | Home Assistant, Mosquitto, Zigbee2MQTT, Matter Server | Home Assistant depends on MQTT, Zigbee and Matter integrations |
 | Photo management | Immich | Depends on PostgreSQL, Redis and the photo library |
 | Network visibility | WatchYourLAN | Basic device visibility inside the LAN |
+| Monitoring | Uptime Kuma | Push monitoring and alerts for the offsite backup job |
 | Knowledge and documentation | Kiwix, Joplin | Local knowledge base, notes and documentation |
 | Backend services | PostgreSQL, Redis | Used by selected applications, especially services with persistent state |
 
@@ -37,6 +38,8 @@ Why it matters:
 - DNS filtering
 - DNS query visibility
 - foundation for clean reverse proxy usage
+
+The work and gaming networks do not use AdGuard. They use the gateway's DNS with Quad9 as upstream.
 
 For restore planning, DNS is one of the first services I would bring back.
 
@@ -69,8 +72,11 @@ For me, this means:
 
 - access should stay limited to trusted paths
 - AppData backups are critical
+- it is included in the offsite backup
 - restore steps should be tested carefully
 - screenshots and logs must be handled carefully
+
+For the offsite backup, the Vaultwarden container is stopped for a short moment so the database is in a consistent state, and started again right after.
 
 Vaultwarden is high priority during restore planning, but it depends on the base infrastructure being available first.
 
@@ -90,6 +96,10 @@ Main dependencies:
 | Mosquitto | MQTT broker |
 | Zigbee2MQTT | Zigbee device integration through MQTT |
 | Matter Server | Matter integration for Home Assistant |
+
+The Matter Server runs as a Docker container with its own address directly in the IoT network. Matter relies on mDNS and IPv6 in the local network, so the simplest option was to put the Matter Server directly into the IoT network. Home Assistant stays in the server network and only reaches the Matter Server through a specific firewall rule.
+
+I decided against a separate VM for this. A container is enough and uses fewer resources on an always-on server.
 
 Backup-relevant data includes Home Assistant configuration, automations, integrations and the persistent state of the supporting services.
 
@@ -114,13 +124,15 @@ Because it stores personal photos, Immich is part of the backup planning. Restor
 
 ---
 
-## Network Visibility
+## Network Visibility and Monitoring
 
 WatchYourLAN is used for basic LAN visibility.
 
 It helps me notice new or unexpected devices and gives a quick overview of what is connected. This is especially useful now that the network is split into multiple zones.
 
-It is not meant to be a full monitoring stack, but it is useful enough for a homelab.
+Uptime Kuma is used for monitoring the offsite backup. The backup job reports to a push monitor after each run. If the report is missing or the job fails, I get an alert.
+
+This is not meant to be a full monitoring stack, but it is useful enough for a homelab.
 
 ---
 
@@ -147,12 +159,15 @@ A rough restore order would be:
 2. Reverse proxy
 3. Vaultwarden
 4. Home Assistant
-5. Mosquitto and Zigbee2MQTT
+5. Mosquitto, Zigbee2MQTT and Matter Server
 6. Immich stack including database and photo library
-7. Documentation and knowledge services
-8. Optional or experimental services
+7. Monitoring
+8. Documentation and knowledge services
+9. Optional or experimental services
 
 This order is not final, but it helps me think about dependencies. For example, DNS and reverse proxy services should come back early because many other services are easier to reach once they are running again.
+
+If the local backup disk is lost together with the server, the offsite backup is the source for Vaultwarden and important personal data.
 
 ---
 
@@ -171,7 +186,7 @@ The point of this repository is not to publish a full private service inventory.
 A few rules I try to follow when adding or changing services:
 
 - keep persistent data outside the container itself
-- check whether the service needs AppData or share-level backups
+- check whether the service needs AppData, share-level or offsite backups
 - expose only the ports that are actually required
 - use internal DNS and reverse proxying where it makes access cleaner
 - keep test services separated from important services where possible
@@ -182,3 +197,4 @@ For detailed access rules and backup planning, I use the dedicated documents:
 - [Security Concept](security-concept.md)
 - [Backup Strategy](backup-strategy.md)
 - [Network Segmentation](network-roadmap.md)
+- [Lessons Learned](lessons-learned.md)
