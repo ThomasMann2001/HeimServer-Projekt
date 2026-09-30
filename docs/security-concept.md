@@ -19,7 +19,7 @@ The current approach is based on:
 - internal DNS through AdGuard Home and Unbound
 - internal reverse proxying through Nginx Proxy Manager
 - IDS/IPS on the UniFi gateway
-- AppData and share-level backups
+- AppData, share-level and offsite backups
 - careful handling of sensitive services like Vaultwarden
 
 I try to keep the setup understandable. If I add an exception or allow traffic between zones, I want to know later why it exists.
@@ -38,7 +38,9 @@ I try to keep the setup understandable. If I add an exception or allow traffic b
 | Firewall rules | Implemented | Traffic between zones is restricted |
 | IDS/IPS | Enabled | Used on the UniFi gateway as an additional visibility layer |
 | AppData backup | Implemented | Important for service recovery |
-| Offsite backup | Planned | Still an open point for disaster recovery |
+| Offsite backup | Implemented | Append-only, so it cannot be deleted from the server side |
+| Backup monitoring | Implemented | Alerts for failed or missing backup runs |
+| Gateway access per zone | Planned | Limit what less trusted zones can reach on the gateway itself |
 
 ---
 
@@ -53,7 +55,10 @@ Remote access is handled through VPN. I prefer reaching services through a VPN t
 | VPN clients | Remote access to selected internal services |
 | IoT devices | Limited access where smart home communication requires it |
 | Guest devices | Internet-only access |
+| Work devices | Internet-only access, isolated from all internal networks |
+| Gaming devices | Internet-only access, isolated from all internal networks |
 | Lab devices | Restricted testing access, separated from normal production services |
+| Offsite backup peer | Reachable only from the Unraid server for backups, cannot open connections into the network |
 
 The important part for me is that access paths are intentional. A service being available on the network should not automatically mean that every device can reach it.
 
@@ -74,10 +79,12 @@ Current network zones:
 | Server | Unraid and infrastructure services |
 | Media | Media and TV devices |
 | IoT | Smart home and IoT devices |
-| Guest | Guest devices with internet-only access |
+| Guest | Guest devices in UniFi's hotspot zone with internet-only access |
+| Work | Work devices with their own company VPN |
+| Gaming | Consoles and gaming PCs with unfiltered DNS |
 | Lab | Testing and lab devices |
 | Print | Printer devices |
-| VPN | Remote access to selected internal services |
+| VPN | Remote access to selected internal services and the offsite backup tunnel |
 
 The segmentation is not meant to make the network complicated for no reason. It helps me separate devices that should not fully trust each other.
 
@@ -87,7 +94,7 @@ More details: [Network Segmentation](network-roadmap.md)
 
 ## Firewall Approach
 
-The firewall rules follow one basic rule: allow what is needed and block unnecessary lateral movement.
+The firewall uses UniFi's zone-based firewall model. The rules follow one basic rule: allow what is needed and block unnecessary lateral movement.
 
 Current direction:
 
@@ -96,10 +103,13 @@ Current direction:
 - VPN clients can access selected internal services
 - server services are not reachable from every network by default
 - IoT devices are limited to required smart home communication
-- guest devices are intended for internet-only access
+- guest devices are in UniFi's hotspot zone and only get internet access
+- work devices only get internet access and cannot reach internal networks
+- gaming devices only get internet access and cannot reach internal networks
 - printer access is limited to printing-related traffic
 - lab devices are separated from normal productive services where possible
 - untrusted devices are not treated like trusted clients
+- the offsite backup peer can only be reached by the Unraid server and cannot start connections itself
 
 I try not to create random allow rules just to make something work quickly. If an exception is needed, it should be documented or cleaned up later.
 
@@ -118,6 +128,8 @@ I mainly use it for:
 - reviewing alerts when something looks unusual
 - learning how normal traffic in my network behaves
 
+One open point is the gateway itself. By default, every internal zone can reach the gateway on all of its services, including the management interface. Segmentation protects the other networks, but not the gateway. For IoT, Lab, Gaming and Work I want to allow only what these devices actually need from the gateway, like DNS and DHCP, and block the rest.
+
 For a homelab, I think the realistic goal is not to pretend that this is a full security operations setup. The useful part is building habits around visibility, review and clean network design.
 
 ---
@@ -127,6 +139,8 @@ For a homelab, I think the realistic goal is not to pretend that this is a full 
 AdGuard Home and Unbound are used for internal DNS and filtering.
 
 This makes service access cleaner because I do not have to rely on remembering IP addresses and port numbers for every service. It also gives me visibility into DNS requests and one central place for DNS-related changes.
+
+Not every network uses AdGuard. The work and gaming networks use the UniFi gateway as DNS server with Quad9 as upstream. Some things in games did not work reliably behind my DNS filtering, so gaming devices get unfiltered DNS. Work devices are kept completely separate from my internal services, including DNS.
 
 Nginx Proxy Manager is used as the internal reverse proxy. It provides cleaner access to selected services and handles internal HTTPS access paths.
 
@@ -146,6 +160,8 @@ Current approach:
 - remote access goes through VPN
 - public exposure is avoided unless there is a clear reason
 - firewall rules define what VPN clients can reach
+
+The offsite backup target uses the same WireGuard server on the gateway. It connects as a client, just like my remote devices, but firewall rules only allow the Unraid server to reach it.
 
 ---
 
@@ -178,7 +194,10 @@ Current backup-related measures:
 - monthly backup for mostly static archive data
 - dedicated local backup disk
 - backup data separated from normal productive storage
-- offsite backup planned for important data
+- offsite backup for important data
+- monitoring and notifications for the offsite backup job
+
+The offsite backup runs in append-only mode. The Unraid server can add new snapshots, but it cannot delete existing ones. For me, this is the part that matters most against ransomware: even if the server itself were compromised, the offsite copies would stay intact.
 
 Unraid parity is active and protects against a single data disk failure. It is still not a backup.
 
@@ -199,6 +218,7 @@ Some services need extra care because they contain sensitive data or control imp
 | AdGuard Home / Unbound | Important for internal DNS and filtering |
 | UniFi Gateway | Central routing, firewall, IDS/IPS and network control component |
 | Backup target | Should not be treated like normal shared storage |
+| Offsite backup target | Holds copies of important data outside my home and is only reachable through the tunnel |
 
 For these services, access control and backups are more important than for temporary or experimental containers.
 
@@ -214,9 +234,11 @@ Current visibility sources:
 - IDS/IPS findings on the gateway
 - DNS query visibility through AdGuard Home
 - device visibility through UniFi and network tools
+- Uptime Kuma push monitoring for the offsite backup job
+- Home Assistant push notifications as a second alert path
 - service logs where needed
 
-The next step is better alerting, especially for backup failures and network/security events that are worth reviewing.
+Backup alerting is in place now. The next step is better alerting for network and security events that are worth reviewing.
 
 ---
 
@@ -224,9 +246,10 @@ The next step is better alerting, especially for backup failures and network/sec
 
 Things I still want to improve:
 
-- add offsite backup for important data
 - document restore tests
-- improve monitoring and alerting
+- restrict gateway access for less trusted zones
+- set up retention for the offsite backup repository
+- improve monitoring and alerting for network and security events
 - review firewall exceptions over time
 - review IDS/IPS findings and tune the setup if needed
 - keep DNS, reverse proxy and firewall documentation aligned
