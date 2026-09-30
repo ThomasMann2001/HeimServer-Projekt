@@ -18,8 +18,9 @@ The main goals are:
 - separate application data, user data, backups and lab workloads
 - avoid exposing internal services directly to the internet
 - use VPN, internal DNS and reverse proxying in a controlled way
-- separate clients, servers, IoT, guest, print and lab devices
+- separate clients, servers, IoT, guest, work, gaming, print and lab devices
 - make backups and restore planning part of the design
+- keep a copy of important data outside my home
 - keep enough room for future changes without rebuilding everything
 
 ---
@@ -31,20 +32,22 @@ flowchart TD
     Internet((Internet))
     UCG["UniFi Cloud Gateway Fiber<br/>Gateway / Firewall / IDS/IPS"]
     Flex8["USW Flex 2.5G 8<br/>Main Switch"]
-    Flex5["USW Flex 2.5G 5<br/>Additional Switch"]
+    FlexMini["USW Flex Mini 2.5G<br/>Additional Switch"]
     AP["U6+ Access Point"]
     Unraid["Unraid Server"]
     WiredClients["Wired Clients"]
     WiFiClients["Wi-Fi / IoT Devices"]
+    Offsite["Offsite Backup Target<br/>Raspberry Pi + 4 TB HDD"]
 
     Internet --> UCG
     UCG -->|"direct connection"| Unraid
     UCG -->|"10G uplink"| Flex8
     UCG -->|"PoE"| AP
-    Flex8 --> Flex5
+    Flex8 --> FlexMini
     Flex8 --> WiredClients
-    Flex5 --> WiredClients
+    FlexMini --> WiredClients
     AP --> WiFiClients
+    UCG -.->|"WireGuard site-to-site"| Offsite
 
     subgraph UnraidHost["Unraid Host"]
         Docker["Docker Engine"]
@@ -68,9 +71,9 @@ flowchart TD
 | Component | Role |
 |---|---|
 | Unraid server | Central storage, Docker and lab host |
-| UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS and network controller |
+| UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS, VPN and network controller |
 | USW Flex 2.5G 8 | Main 2.5G switch, connected to the gateway with a 10G uplink |
-| USW Flex 2.5G 5 | Additional 2.5G switch for wired clients |
+| USW Flex Mini 2.5G | Additional 2.5G switch for wired clients |
 | U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
 | AdGuard Home / Unbound | Internal DNS, filtering and upstream DNS resolution |
 | Nginx Proxy Manager | Internal reverse proxy and HTTPS access |
@@ -80,6 +83,8 @@ flowchart TD
 | NVMe SSD | AppData, Docker data and cache workloads |
 | Dedicated backup disk | Local backup target |
 | SATA SSD | Virtual machines, testing and lab workloads |
+| Offsite backup target | Raspberry Pi with a 4 TB HDD at an offsite location, append-only restic target |
+| Uptime Kuma | Monitoring for the offsite backup job |
 
 ---
 
@@ -93,8 +98,9 @@ A few decisions shape the current setup:
 - Internal services are private by default.
 - Remote access is handled through VPN.
 - Internal DNS and reverse proxying make service access cleaner.
-- Network zones separate clients, servers, IoT devices, guests, printers and lab workloads.
+- Network zones separate clients, servers, IoT devices, guests, work devices, gaming devices, printers and lab workloads.
 - Parity is active, but backups are handled separately.
+- The offsite backup is append-only, so the server can add snapshots but not delete them.
 
 ---
 
@@ -109,7 +115,10 @@ The access model is based on VPN-first remote access and controlled internal acc
 | VPN clients | Remote access to selected internal services |
 | IoT devices | Limited access where smart home communication requires it |
 | Guest devices | Internet-only access |
+| Work devices | Internet-only access, isolated from all internal networks |
+| Gaming devices | Internet-only access, isolated from all internal networks |
 | Lab devices | Restricted testing access, separated from normal production services |
+| Offsite backup target | Only reachable from the Unraid server, cannot start connections into the network |
 
 Internal services are not exposed publicly by default. If a service needs to be reachable, I prefer to document the access path instead of adding temporary exceptions and forgetting about them later.
 
@@ -128,10 +137,12 @@ The network is segmented into different zones. The exact implementation is docum
 | Server | Unraid and infrastructure services |
 | Media | Media and TV devices |
 | IoT | Smart home and IoT devices |
-| Guest | Guest devices with internet-only access |
+| Guest | Guest devices in UniFi's hotspot zone with internet-only access |
+| Work | Work devices with their own company VPN |
+| Gaming | Consoles and gaming PCs with unfiltered DNS |
 | Lab | Testing and lab devices |
 | Print | Printer devices |
-| VPN | Remote access to selected internal services |
+| VPN | Remote access to selected internal services and the offsite backup tunnel |
 
 More details: [Network Segmentation](network-roadmap.md)
 
@@ -148,7 +159,7 @@ Main service groups:
 - Password management
 - Smart home infrastructure
 - Photo management
-- Network visibility
+- Network visibility and monitoring
 - Documentation and knowledge services
 - Backend services such as PostgreSQL and Redis
 
@@ -170,6 +181,7 @@ The storage layout separates different workload types.
 | Dedicated backup disk | Local backup target for selected data |
 | Private data disk | Private and important data |
 | SATA SSD | Virtual machines, tests and lab workloads |
+| Offsite backup disk | Offsite copy of important data |
 
 Parity protects against a single data disk failure, but it is not a backup. Backups are planned and documented separately.
 
@@ -179,7 +191,7 @@ More details: [Storage Layout](storage-layout.md)
 
 ## Backup Layout
 
-The backup concept is split into AppData backups and share-level backups.
+The backup concept is split into AppData backups, share-level backups and an offsite backup.
 
 Current backup layers:
 
@@ -187,7 +199,8 @@ Current backup layers:
 - Weekly backups for photos and selected important data
 - Monthly backups for mostly static archive data
 - Dedicated local backup disk
-- Planned offsite backup for important data
+- Weekly offsite backup with restic over a WireGuard site-to-site tunnel
+- Monitoring and notifications for the offsite backup job
 
 More details: [Backup Strategy](backup-strategy.md)
 
@@ -208,6 +221,7 @@ Current measures include:
 - VLAN-based network segmentation
 - firewall rules between network zones
 - separate backup target
+- append-only offsite backup
 - sanitized public documentation
 
 More details: [Security Concept](security-concept.md)
@@ -216,4 +230,4 @@ More details: [Security Concept](security-concept.md)
 
 ## Notes
 
-This architecture is still evolving. The current focus is to keep the setup understandable and maintainable while improving backups, restore documentation, monitoring and network rule documentation over time.
+This architecture is still evolving. The current focus is to keep the setup understandable and maintainable while improving restore documentation, monitoring, gateway access rules and network rule documentation over time.
