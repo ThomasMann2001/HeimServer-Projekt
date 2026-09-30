@@ -17,6 +17,7 @@ Remote access is handled through VPN. Internal services are not exposed directly
 Current state:
 
 - UniFi gateway/firewall is implemented
+- UniFi's zone-based firewall model is in use
 - network segmentation is implemented
 - firewall rules between network zones are implemented
 - IDS/IPS is enabled on the UniFi gateway
@@ -25,6 +26,11 @@ Current state:
 - main switch is connected to the gateway with a 10G uplink
 - internal DNS is handled through AdGuard Home and Unbound
 - selected internal access paths use Nginx Proxy Manager
+- the offsite backup target connects as a WireGuard client to the gateway (client-to-site)
+- separate networks for work and gaming devices are in place, both without access to internal networks
+- the guest network uses UniFi's hotspot zone
+- IPv6 is enabled in the IoT network for Matter devices
+- mDNS forwarding is limited to the networks that actually need it
 
 ---
 
@@ -32,11 +38,12 @@ Current state:
 
 | Component | Role |
 |---|---|
-| UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS and network controller |
+| UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS, VPN and network controller |
 | Unraid server | Server and infrastructure services, connected directly to the gateway |
 | USW Flex 2.5G 8 | Main 2.5G switch, connected to the gateway with a 10G uplink |
 | USW Flex Mini 2.5G | Additional 2.5G switch for wired clients |
 | U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
+| Offsite backup target | Raspberry Pi at an offsite location, connected as a WireGuard client to the gateway |
 
 The Unraid server is connected directly to the gateway. The main switch uses a 10G uplink to the gateway. The U6+ access point is also connected directly to the gateway via PoE.
 
@@ -54,6 +61,7 @@ flowchart TD
     Unraid["Unraid Server"]
     WiredClients["Wired Clients"]
     WiFiClients["Wi-Fi / IoT Devices"]
+    Offsite["Offsite Backup Target<br/>Raspberry Pi"]
 
     Internet --> UCG
     UCG -->|"direct connection"| Unraid
@@ -63,6 +71,7 @@ flowchart TD
     Flex8 --> WiredClients
     FlexMini --> WiredClients
     AP --> WiFiClients
+    Offsite -.->|"WireGuard client-to-site"| UCG
 ```
 
 ---
@@ -80,10 +89,12 @@ I split the network into different zones so that not every device has the same l
 | Server | Unraid and infrastructure services | Access only from allowed networks |
 | Media | Media and TV devices | Limited access to required media services |
 | IoT | Smart home and IoT devices | Limited access where Home Assistant, MQTT or device control requires it |
-| Guest | Guest devices | Internet-only access |
+| Guest | Guest devices | Internet-only access through UniFi's hotspot zone |
+| Work | Work devices with their own company VPN | Internet-only access, isolated from all internal networks |
+| Gaming | Consoles and gaming PCs | Internet-only access, DNS through the gateway without filtering |
 | Lab | Testing and lab devices | Separated from normal productive services |
 | Print | Printer devices | Only required printing-related access |
-| VPN | Remote access | Access to selected internal services |
+| VPN | Remote access and offsite backup tunnel | Access to selected internal services, offsite target only reachable from the server |
 
 I try to keep the network simple enough to maintain, while still separating devices that should not fully trust each other.
 
@@ -102,9 +113,12 @@ flowchart LR
     Media["Media"]
     IoT["IoT"]
     Guest["Guest"]
+    Work["Work"]
+    Gaming["Gaming"]
     Lab["Lab"]
     Print["Print"]
     VPN["VPN"]
+    Offsite["Offsite Backup Target"]
 
     UCG --> MGMT
     UCG --> Trusted
@@ -113,9 +127,12 @@ flowchart LR
     UCG --> Media
     UCG --> IoT
     UCG --> Guest
+    UCG --> Work
+    UCG --> Gaming
     UCG --> Lab
     UCG --> Print
     UCG --> VPN
+    VPN --> Offsite
 
     MGMT -.->|"management access"| Server
     Trusted -.->|"selected access"| Server
@@ -125,14 +142,17 @@ flowchart LR
     Print -.->|"printing only"| Trusted
     Lab -.->|"restricted testing access"| Server
     Untrusted -.->|"restricted access"| Server
+    Server -.->|"backup traffic only"| Offsite
     Guest -.->|"internet only"| UCG
+    Work -.->|"internet only"| UCG
+    Gaming -.->|"internet only"| UCG
 ```
 
 ---
 
 ## Firewall Approach
 
-The firewall rules are based on a simple idea: allow the traffic that is required and block unnecessary lateral movement.
+The firewall uses UniFi's zone-based model. The rules are based on a simple idea: allow the traffic that is required and block unnecessary lateral movement.
 
 Current direction:
 
@@ -143,11 +163,35 @@ Current direction:
 - IoT devices are limited to required smart home communication
 - media devices only get the access they need
 - printer access is limited to printing-related traffic
-- guest devices are intended for internet-only access
+- guest devices are in UniFi's hotspot zone and only get internet access
+- work devices only get internet access and are blocked from all internal networks
+- gaming devices only get internet access and are blocked from all internal networks
 - lab devices are separated from normal productive services where possible
 - untrusted devices are not treated like trusted clients
+- the offsite backup target can only be reached by the Unraid server and cannot start connections into my networks
 
 When I add an exception, I want to be able to understand later why it exists. That is the main reason I document the rule direction instead of just relying on the UniFi UI.
+
+### Return traffic
+
+One thing I learned while setting up the Matter Server: when a custom block rule exists between two zones, UniFi's automatically created return rules did not help. In the rule list they are placed below my own block rules. The fix was an explicit allow rule for return traffic, placed above the block rule. I now check this first when a connection works in one direction but answers never arrive.
+
+### Rules are bound to devices
+
+Firewall rules, VLAN overrides and fixed IPs in UniFi are bound to a client entry, which means a MAC address. Phones with randomized MAC addresses can show up as new clients, and device-based rules then stop working without any warning in the UI. I keep this in mind when a rule suddenly stops working for a single device.
+
+---
+
+## DNS per Network
+
+Most networks use AdGuard Home and Unbound for DNS. That gives me filtering, internal service names and visibility into DNS requests.
+
+Two networks are an exception:
+
+| Network | DNS | Reason |
+|---|---|---|
+| Work | UniFi gateway with Quad9 as upstream | Work devices are kept completely separate from my internal services, including DNS |
+| Gaming | UniFi gateway with Quad9 as upstream | Some things in games did not work reliably behind my DNS filtering |
 
 ---
 
@@ -163,6 +207,14 @@ What I use it for:
 - getting additional visibility into network activity
 - reviewing alerts when something looks unusual
 - learning how the network behaves over time
+
+By default, UniFi lets internal zones reach the gateway on all of its services, including the management interface. Segmentation protects the networks from each other, but not the gateway itself. The plan for IoT, Lab, Gaming and Work:
+
+| Step | Rule |
+|---|---|
+| 1 | Allow to gateway: DNS and DHCP, and NTP, mDNS or UPnP for gaming where needed |
+| 2 | Block to gateway: everything else |
+| 3 | Test: devices still get an address and DNS, the gateway UI is no longer reachable from these zones |
 
 This is still a homelab, so I try to keep the setup realistic and maintainable instead of pretending it is an enterprise SOC.
 
@@ -180,6 +232,8 @@ Things I want to keep track of:
 - which rules were only created for testing
 - how DNS and reverse proxying interact with the segmented network
 - IDS/IPS findings that are worth reviewing
-- troubleshooting notes, for example printer discovery or IoT access issues
+- restrict gateway access for less trusted zones
+
+Troubleshooting notes are collected here: [Lessons Learned](lessons-learned.md)
 
 More details: [Security Concept](security-concept.md)
