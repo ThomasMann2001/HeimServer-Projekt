@@ -31,6 +31,7 @@ Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adap
 | Local backup disk | Backup target for selected data |
 | Private data disk | Separate storage for private and important data |
 | SATA SSD | Virtual machines, tests and lab workloads |
+| Offsite backup disk | Offsite copy of important data, outside the server |
 
 The layout is not meant to be overly complex. I mainly want to avoid mixing temporary workloads, important AppData, long-term data and backups without a clear reason.
 
@@ -72,7 +73,7 @@ A separate 4 TB disk is used for private and important data.
 
 The reason for separating it is mostly operational: I want private data to have a clear place in the storage layout instead of being mixed into random general-purpose shares.
 
-This disk is protected by Unraid parity like the other data disks in the array, but it still needs separate backup planning.
+This disk is protected by Unraid parity like the other data disks in the array, and the important data on it is included in the offsite backup.
 
 ---
 
@@ -82,7 +83,23 @@ A dedicated 4 TB HDD is used as the local backup target.
 
 It is separated from normal productive storage and used for selected AppData and share-level backups. This makes quick restores easier and keeps backup data away from day-to-day storage.
 
-The local backup disk is useful, but it is still only local. Offsite backup is still planned for important data.
+The local backup disk is useful, but it is still only local. That is why important data is also backed up offsite.
+
+More details: [Backup Strategy](backup-strategy.md)
+
+---
+
+## Offsite Backup Disk
+
+The offsite backup target is not part of the server. It is a Raspberry Pi with a dedicated 4 TB HDD at an offsite location.
+
+| Device | Model | Capacity | Role |
+|---|---:|---:|---|
+| HDD | WDC WD40EFAX | 4 TB | Offsite restic repository |
+
+The disk is formatted with XFS and spins down after a short idle time, because it is only needed once a week.
+
+The WD40EFAX is an SMR drive. For a backup target that is written once a week with mostly sequential writes, this is acceptable. The array and the local backup disk use CMR drives.
 
 More details: [Backup Strategy](backup-strategy.md)
 
@@ -120,8 +137,8 @@ Important points:
 - AppData is backed up separately because it is required for service recovery.
 - Selected user data is backed up weekly.
 - Mostly static archive data is backed up monthly.
-- The local backup disk is only one backup layer.
-- Offsite backup is still planned.
+- The local backup disk is one backup layer.
+- Important data is also backed up to the offsite disk.
 - Parity is not considered a backup.
 
 ---
@@ -132,7 +149,7 @@ At the moment, no additional data disk is planned.
 
 Possible future changes:
 
-- add offsite backup storage
 - add more storage if data requirements increase
 - document restore tests
-- improve monitoring for disk health and failed backup jobs
+- improve monitoring for disk health
+- clean up two shares that only differ in upper and lower case, after checking which containers use which path
