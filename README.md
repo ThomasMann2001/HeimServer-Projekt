@@ -4,7 +4,7 @@
 
 Dieses Repository dokumentiert mein privates Unraid-basiertes Homelab.
 
-Der Fokus liegt auf Storage-Design, Docker-Services, Backup-Strategie, internem DNS, Reverse Proxying, VPN-first Zugriff sowie einer umgesetzten UniFi-basierten VLAN- und Firewall-Segmentierung.
+Der Fokus liegt auf Storage-Design, Docker-Services, Backup-Strategie inklusive Offsite-Backup, internem DNS, Reverse Proxying, VPN-first Zugriff sowie einer umgesetzten UniFi-basierten VLAN- und Firewall-Segmentierung.
 
 Das Projekt dient als praxisnahe Lern- und Dokumentationsumgebung für Systemadministration, Self-Hosting, Netzwerksicherheit, Backup-/Restore-Planung und den Betrieb eigener Infrastruktur.
 
@@ -20,7 +20,7 @@ Main focus areas:
 
 - Unraid storage design
 - Docker-based services
-- AppData and share backups
+- AppData, share and offsite backups
 - VPN-first remote access
 - Internal DNS and reverse proxying
 - Smart home infrastructure
@@ -41,11 +41,10 @@ Not included in this repository:
 - real share names with private information
 - secrets, tokens, certificates and private keys
 - private VPN configuration
+- the location of the offsite backup target
 - screenshots with serial numbers, MAC addresses or sensitive device names
 
 The idea is to document the setup, decisions and learning process without publishing unnecessary internal details.
-
----
 
 ---
 
@@ -59,13 +58,14 @@ The idea is to document the setup, decisions and learning process without publis
 | Internal reverse proxy | Implemented with Nginx Proxy Manager |
 | VPN-first remote access | Implemented |
 | Local backups | Implemented for AppData and selected shares |
+| Offsite backup | Implemented with restic over a WireGuard site-to-site tunnel |
+| Backup monitoring | Implemented with Uptime Kuma and Home Assistant notifications |
 | Array parity | Implemented with an 8 TB parity disk |
 | Private data disk | Implemented with a dedicated 4 TB disk |
 | UniFi gateway/firewall | Implemented |
 | VLAN segmentation | Implemented |
 | Firewall rules | Implemented between network zones |
 | Gateway IDS/IPS | Enabled on the UniFi gateway |
-| Offsite backup | Planned |
 
 ---
 
@@ -80,6 +80,7 @@ The idea is to document the setup, decisions and learning process without publis
 | PSU | NZXT Core Gold 750 W |
 | SATA Expansion | M.2 PCIe SATA expansion adapter for additional SATA ports |
 | Operating System | Unraid |
+| Offsite backup target | Raspberry Pi 3 Model B+ with a 4 TB HDD |
 
 ---
 
@@ -103,6 +104,7 @@ I try to keep the storage layout easy to understand: application data, long-term
 | HDD | WDC WD40EFRX | 4 TB | Local backup target |
 | HDD | Private data disk | 4 TB | Private and important data |
 | SATA SSD | Micron 1100 MTFDDAK256TBN | 256 GB | Virtual machines, testing and experiments |
+| HDD (offsite) | WDC WD40EFAX | 4 TB | Offsite backup target |
 
 Important design notes:
 
@@ -114,6 +116,7 @@ Important design notes:
 - A separate 4 TB HDD is used for private and important data.
 - A separate SATA SSD is used for VMs and lab/testing workloads.
 - Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adapter.
+- A second 4 TB HDD at an offsite location holds the offsite backup.
 
 More details: [Storage Layout](docs/storage-layout.md)
 
@@ -131,6 +134,7 @@ The services are grouped by their role in the environment. Not every private, te
 | Smart home | Home Assistant, Mosquitto, Zigbee2MQTT, Matter Server | Smart home automation and device integration |
 | Photo management | Immich stack | Self-hosted photo management |
 | Network visibility | WatchYourLAN | Basic LAN device visibility |
+| Monitoring | Uptime Kuma | Monitoring and alerts for the offsite backup |
 | Knowledge and documentation | Kiwix, Joplin | Notes and offline/local knowledge resources |
 | Backend services | PostgreSQL, Redis | Databases and supporting services |
 
@@ -149,20 +153,22 @@ flowchart TD
     Internet((Internet))
     UCG["UniFi Cloud Gateway Fiber<br/>Gateway / Firewall / IDS/IPS"]
     Flex8["USW Flex 2.5G 8<br/>Main Switch"]
-    Flex5["USW Flex 2.5G 5<br/>Additional Switch"]
+    FlexMini["USW Flex Mini 2.5G<br/>Additional Switch"]
     AP["U6+ Access Point"]
     Unraid["Unraid Server"]
     WiredClients["Wired Clients"]
     WiFiClients["Wi-Fi / IoT Devices"]
+    Offsite["Offsite Backup Target<br/>Raspberry Pi + 4 TB HDD"]
 
     Internet --> UCG
     UCG -->|"direct connection"| Unraid
     UCG -->|"10G uplink"| Flex8
     UCG -->|"PoE"| AP
-    Flex8 --> Flex5
+    Flex8 --> FlexMini
     Flex8 --> WiredClients
-    Flex5 --> WiredClients
+    FlexMini --> WiredClients
     AP --> WiFiClients
+    UCG -.->|"WireGuard site-to-site"| Offsite
 
     subgraph UnraidHost["Unraid Host"]
         Docker["Docker Engine"]
@@ -192,9 +198,11 @@ The backup setup is based on how often the data changes and how important it is 
 | AppData Backup | Scheduled | Docker AppData and service state | Restore container configurations and application data |
 | Weekly Backup | `0 5 * * 1` | Photos and selected important data | Protect data that changes more often |
 | Monthly Backup | `30 5 1 * *` | Mostly static archive data | Back up data that rarely changes |
-| Offsite Backup | Planned | Critical data | Complete the 3-2-1 backup strategy |
+| Offsite Backup | Weekly | Photos, important personal data and Vaultwarden | Protect against losing the whole server |
 
-The local backup disk is useful for quick restores, but it is not the final backup concept. An offsite backup target is still planned for important data.
+The local backup disk is useful for quick restores. The offsite backup covers the case where the server and the local backup disk are both gone.
+
+The offsite backup uses restic over a WireGuard site-to-site tunnel. The target runs in append-only mode, so the Unraid server can add new snapshots but cannot delete existing ones. Even a compromised server could not remove the offsite copies.
 
 Unraid parity and backups are treated as separate things:
 
@@ -213,7 +221,7 @@ Current measures:
 
 - VPN-first remote access is implemented.
 - Internal services are not exposed publicly by default.
-- Internal DNS is handled through AdGuard Home and Unbound.
+- Internal DNS is handled through AdGuard Home and Unbound. The work and gaming networks use the gateway's DNS with Quad9 instead.
 - Nginx Proxy Manager is used as an internal reverse proxy.
 - CrowdSec is used as an additional security and visibility component.
 - UniFi gateway/firewall is implemented.
@@ -222,12 +230,13 @@ Current measures:
 - IDS/IPS is enabled on the UniFi gateway as an additional visibility layer.
 - Sensitive services such as Vaultwarden are treated as higher-priority services for backups and access control.
 - Backup targets are separated from normal productive storage.
+- The offsite backup is append-only and can only be reached from the Unraid server.
 
 Open points I still want to improve:
 
-- Offsite backup for important data
 - Better restore documentation and restore testing
-- Monitoring/notifications for failed backup jobs
+- Restrict what less trusted zones can reach on the gateway itself
+- Set up retention for the offsite backup repository
 - Ongoing cleanup and documentation of network exceptions
 
 More details: [Security Concept](docs/security-concept.md)
@@ -242,11 +251,11 @@ Current network components:
 
 | Component | Role |
 |---|---|
-| UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS and network controller |
+| UniFi Cloud Gateway Fiber | Gateway, firewall, IDS/IPS, VPN and network controller |
 | Unraid server | Server and infrastructure services, connected directly to the gateway |
 | U6+ | Managed Wi-Fi access point, connected directly to the gateway via PoE |
 | USW Flex 2.5G 8 | Main 2.5G switch, connected to the gateway with a 10G uplink |
-| USW Flex 2.5G 5 | Additional 2.5G switch for wired clients |
+| USW Flex Mini 2.5G | Additional 2.5G switch for wired clients |
 
 The Unraid server is connected directly to the UniFi Cloud Gateway Fiber. The main switch is connected to the gateway through a 10G uplink. The U6+ access point is also connected directly to the gateway via PoE.
 
@@ -261,10 +270,12 @@ Current network zones:
 | Server | Unraid and infrastructure services |
 | Media | Media and TV devices |
 | IoT | Smart home and IoT devices |
-| Guest | Guest devices with internet-only access |
+| Guest | Guest devices in UniFi's hotspot zone with internet-only access |
+| Work | Work devices with their own company VPN, isolated from internal networks |
+| Gaming | Consoles and gaming PCs, internet-only access with unfiltered DNS |
 | Lab | Testing and lab devices |
 | Print | Printer devices |
-| VPN | Remote access to selected internal services |
+| VPN | Remote access to selected internal services and the offsite backup tunnel |
 
 I try to keep the network simple enough to maintain, while still separating devices that should not fully trust each other.
 
@@ -280,10 +291,11 @@ The repository is split into several documentation files:
 |---|---|
 | [Architecture](docs/architecture.md) | Current Unraid architecture, access model and UniFi network design |
 | [Storage Layout](docs/storage-layout.md) | Storage roles, AppData/cache design, array layout and current disk layout |
-| [Backup Strategy](docs/backup-strategy.md) | AppData backup, weekly/monthly backups and 3-2-1 backup roadmap |
+| [Backup Strategy](docs/backup-strategy.md) | AppData backup, weekly/monthly backups, offsite backup and 3-2-1 status |
 | [Security Concept](docs/security-concept.md) | VPN-first access, internal DNS, reverse proxying and VLAN segmentation |
 | [Network Roadmap](docs/network-roadmap.md) | UniFi network design, network zones and firewall direction |
 | [Service Overview](docs/service-overview.md) | Overview of the main infrastructure and application services |
+| [Lessons Learned](docs/lessons-learned.md) | Problems that took longer than expected, their real causes and fixes |
 
 ---
 
@@ -297,10 +309,15 @@ The repository is split into several documentation files:
 | Done | Create VLAN segmentation |
 | Done | Add firewall rules between network zones |
 | Done | Document core network zones and access concept |
+| Done | Add offsite backup target |
+| Done | Add monitoring/notifications for failed backup jobs |
+| Done | Add separate network for work devices |
+| Done | Add separate network for gaming devices |
+| Done | Move guest network into UniFi's hotspot zone |
 | In progress | Keep storage, backup and network documentation up to date |
-| Planned | Add offsite backup target |
 | Planned | Document restore tests |
-| Planned | Add monitoring/notifications for failed backup jobs |
+| Planned | Restrict gateway access for less trusted zones |
+| Planned | Set up retention for the offsite backup repository |
 | Planned | Add more sanitized screenshots and example configurations |
 
 ---
