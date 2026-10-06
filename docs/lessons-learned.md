@@ -4,7 +4,7 @@ This document collects problems from my homelab that took me longer than expecte
 
 I write them down because the actual cause was often not where I first looked. Next time I want to check the right thing first instead of repeating the same detour.
 
-Each entry follows the same structure: what I saw, what the real cause was, how I fixed it and what I take from it.
+Most entries follow the same structure: what I saw, what the real cause was, how I fixed it and what I take from it.
 
 ---
 
