@@ -120,13 +120,13 @@ It is still only a local backup. If the whole server is lost, this disk would li
 
 The offsite backup is the last layer of the setup. It covers the case where the server and the local backup disk are both gone.
 
-The offsite target is a Raspberry Pi with a dedicated 4 TB HDD at an offsite location. It is connected to my network through a WireGuard site-to-site tunnel on the UniFi gateway.
+The offsite target is a Raspberry Pi with a dedicated 4 TB HDD at an offsite location. It connects to my network as a WireGuard client of the UniFi gateway (client-to-site), in its own VPN network separate from my remote devices. Only the Raspberry Pi itself is part of the tunnel, not the network at the offsite location.
 
 | Part | Implementation |
 |---|---|
 | Backup tool | restic |
 | Target | rest-server on the Raspberry Pi |
-| Transport | WireGuard site-to-site tunnel |
+| Transport | WireGuard tunnel, client-to-site |
 | Encryption | restic repository encryption |
 | Schedule | Weekly, through Unraid User Scripts |
 | Scope | Photos, important personal data, notes and Vaultwarden AppData |
@@ -138,7 +138,7 @@ restic backs up directly from the source shares, not from the local backup disk.
 
 The rest-server runs in append-only mode. The Unraid server can create new snapshots, but it cannot delete or overwrite existing ones.
 
-For me, this is the most important part of the offsite design. If the Unraid server were compromised, for example by ransomware, an attacker could still not remove the offsite snapshots from the server side. I tested this: a `restic forget` from the Unraid server is rejected by the rest-server.
+For me, this is the most important part of the offsite design. If the Unraid server were compromised, for example by ransomware, an attacker still could not remove the offsite snapshots from the server side. I tested this: a `restic forget` from the Unraid server is rejected by the rest-server.
 
 ### Access to the offsite target
 
@@ -172,7 +172,7 @@ The current approach:
 - separate jobs for different backup scopes
 - clear schedules
 - versioned backup directories and snapshots
-- limited retention
+- limited retention for the local backups
 - monitoring for the offsite job
 - sanitized public example script
 
@@ -240,7 +240,7 @@ This helps me avoid wasting backup space on data that is temporary or easy to re
 
 With the offsite backup in place, the important data now follows the 3-2-1 idea:
 
-- primary data on the Unraid array
+- primary data on the Unraid server
 - a second copy on the dedicated local backup disk
 - a third copy at an offsite location
 - the offsite copy is protected against deletion from the server side
