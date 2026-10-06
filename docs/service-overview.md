@@ -97,7 +97,7 @@ Main dependencies:
 | Zigbee2MQTT | Zigbee device integration through MQTT |
 | Matter Server | Matter integration for Home Assistant |
 
-The Matter Server runs as a Docker container with its own address directly in the IoT network. Matter relies on mDNS and IPv6 in the local network, so the simplest option was to put the Matter Server directly into the IoT network. Home Assistant stays in the server network and only reaches the Matter Server through a specific firewall rule.
+The Matter Server runs as a Docker container with its own address in the IoT network. Matter relies on mDNS and IPv6 in the local network, so putting the Matter Server into the same network as the devices was the simplest option. Home Assistant stays in the server network and only reaches the Matter Server through a specific firewall rule.
 
 I decided against a separate VM for this. A container is enough and uses fewer resources on an always-on server.
 
