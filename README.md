@@ -58,7 +58,7 @@ The idea is to document the setup, decisions and learning process without publis
 | Internal reverse proxy | Implemented with Nginx Proxy Manager |
 | VPN-first remote access | Implemented |
 | Local backups | Implemented for AppData and selected shares |
-| Offsite backup | Implemented with restic over a WireGuard site-to-site tunnel |
+| Offsite backup | Implemented with restic over a WireGuard tunnel |
 | Backup monitoring | Implemented with Uptime Kuma and Home Assistant notifications |
 | Array parity | Implemented with an 8 TB parity disk |
 | Private data disk | Implemented with a dedicated 4 TB disk |
@@ -100,9 +100,9 @@ I try to keep the storage layout easy to understand: application data, long-term
 |---|---:|---:|---|
 | NVMe SSD | WD Red SN700 | 500 GB | AppData, Docker data and cache |
 | HDD | WDC WD80EFPX | 8 TB | Main data disk |
-| HDD | Parity disk | 8 TB | Unraid parity protection |
+| HDD | WDC WD80EFPX | 8 TB | Unraid parity protection |
 | HDD | WDC WD40EFRX | 4 TB | Local backup target |
-| HDD | Private data disk | 4 TB | Private and important data |
+| HDD | WDC WD40EFRX | 4 TB | Private and important data |
 | SATA SSD | Micron 1100 MTFDDAK256TBN | 256 GB | Virtual machines, testing and experiments |
 | HDD (offsite) | WDC WD40EFAX | 4 TB | Offsite backup target |
 
@@ -116,7 +116,7 @@ Important design notes:
 - A separate 4 TB HDD is used for private and important data.
 - A separate SATA SSD is used for VMs and lab/testing workloads.
 - Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adapter.
-- A second 4 TB HDD at an offsite location holds the offsite backup.
+- Another 4 TB HDD at an offsite location holds the offsite backup.
 
 More details: [Storage Layout](docs/storage-layout.md)
 
@@ -168,7 +168,7 @@ flowchart TD
     Flex8 --> WiredClients
     FlexMini --> WiredClients
     AP --> WiFiClients
-    UCG -.->|"WireGuard site-to-site"| Offsite
+    Offsite -.->|"WireGuard client-to-site"| UCG
 
     subgraph UnraidHost["Unraid Host"]
         Docker["Docker Engine"]
@@ -198,11 +198,11 @@ The backup setup is based on how often the data changes and how important it is 
 | AppData Backup | Scheduled | Docker AppData and service state | Restore container configurations and application data |
 | Weekly Backup | `0 5 * * 1` | Photos and selected important data | Protect data that changes more often |
 | Monthly Backup | `30 5 1 * *` | Mostly static archive data | Back up data that rarely changes |
-| Offsite Backup | Weekly | Photos, important personal data and Vaultwarden | Protect against losing the whole server |
+| Offsite Backup | Weekly | Photos, important personal data, notes and Vaultwarden | Protect against losing the whole server |
 
 The local backup disk is useful for quick restores. The offsite backup covers the case where the server and the local backup disk are both gone.
 
-The offsite backup uses restic over a WireGuard site-to-site tunnel. The target runs in append-only mode, so the Unraid server can add new snapshots but cannot delete existing ones. Even a compromised server could not remove the offsite copies.
+The offsite backup uses restic over a WireGuard tunnel. The offsite target connects as a WireGuard client to my gateway, in its own VPN network. The target runs in append-only mode, so the Unraid server can add new snapshots but cannot delete existing ones. Even a compromised server could not remove the offsite copies.
 
 Unraid parity and backups are treated as separate things:
 
@@ -270,8 +270,8 @@ Current network zones:
 | Server | Unraid and infrastructure services |
 | Media | Media and TV devices |
 | IoT | Smart home and IoT devices |
-| Guest | Guest devices in UniFi's hotspot zone with internet-only access |
-| Work | Work devices with their own company VPN, isolated from internal networks |
+| Guest | Guest devices in UniFi's Hotspot zone with internet-only access |
+| Work | Work devices with their own company VPN, internet-only access |
 | Gaming | Consoles and gaming PCs, internet-only access with unfiltered DNS |
 | Lab | Testing and lab devices |
 | Print | Printer devices |
@@ -313,7 +313,7 @@ The repository is split into several documentation files:
 | Done | Add monitoring/notifications for failed backup jobs |
 | Done | Add separate network for work devices |
 | Done | Add separate network for gaming devices |
-| Done | Move guest network into UniFi's hotspot zone |
+| Done | Move guest network into UniFi's Hotspot zone |
 | In progress | Keep storage, backup and network documentation up to date |
 | Planned | Document restore tests |
 | Planned | Restrict gateway access for less trusted zones |
