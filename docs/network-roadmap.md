@@ -28,9 +28,8 @@ Current state:
 - selected internal access paths use Nginx Proxy Manager
 - the offsite backup target connects as a WireGuard client to the gateway (client-to-site)
 - separate networks for work and gaming devices are in place, both without access to internal networks
-- the guest network uses UniFi's hotspot zone
+- the guest network uses UniFi's Hotspot zone
 - IPv6 is enabled in the IoT network for Matter devices
-- mDNS forwarding is limited to the networks that actually need it
 
 ---
 
@@ -89,7 +88,7 @@ I split the network into different zones so that not every device has the same l
 | Server | Unraid and infrastructure services | Access only from allowed networks |
 | Media | Media and TV devices | Limited access to required media services |
 | IoT | Smart home and IoT devices | Limited access where Home Assistant, MQTT or device control requires it |
-| Guest | Guest devices | Internet-only access through UniFi's hotspot zone |
+| Guest | Guest devices | Internet-only access through UniFi's Hotspot zone |
 | Work | Work devices with their own company VPN | Internet-only access, isolated from all internal networks |
 | Gaming | Consoles and gaming PCs | Internet-only access, DNS through the gateway without filtering |
 | Lab | Testing and lab devices | Separated from normal productive services |
@@ -163,12 +162,12 @@ Current direction:
 - IoT devices are limited to required smart home communication
 - media devices only get the access they need
 - printer access is limited to printing-related traffic
-- guest devices are in UniFi's hotspot zone and only get internet access
+- guest devices are in UniFi's Hotspot zone and only get internet access
 - work devices only get internet access and are blocked from all internal networks
 - gaming devices only get internet access and are blocked from all internal networks
 - lab devices are separated from normal productive services where possible
 - untrusted devices are not treated like trusted clients
-- the offsite backup target can only be reached by the Unraid server and cannot start connections into my networks
+- the offsite backup target can only be reached by the Unraid server and cannot start connections into my internal networks
 
 When I add an exception, I want to be able to understand later why it exists. That is the main reason I document the rule direction instead of just relying on the UniFi UI.
 
@@ -184,9 +183,9 @@ Firewall rules, VLAN overrides and fixed IPs in UniFi are bound to a client entr
 
 ## DNS per Network
 
-Most networks use AdGuard Home and Unbound for DNS. That gives me filtering, internal service names and visibility into DNS requests.
+My main networks use AdGuard Home and Unbound for DNS. That gives me filtering, internal service names and visibility into DNS requests.
 
-Two networks are an exception:
+Work and gaming are deliberate exceptions:
 
 | Network | DNS | Reason |
 |---|---|---|
