@@ -58,7 +58,7 @@ Remote access is handled through VPN. I prefer reaching services through a VPN t
 | Work devices | Internet-only access, isolated from all internal networks |
 | Gaming devices | Internet-only access, isolated from all internal networks |
 | Lab devices | Restricted testing access, separated from normal production services |
-| Offsite backup peer | Reachable only from the Unraid server for backups, cannot open connections into the network |
+| Offsite backup target | Reachable only from the Unraid server for backups, cannot open connections into my internal networks |
 
 The important part for me is that access paths are intentional. A service being available on the network should not automatically mean that every device can reach it.
 
@@ -79,7 +79,7 @@ Current network zones:
 | Server | Unraid and infrastructure services |
 | Media | Media and TV devices |
 | IoT | Smart home and IoT devices |
-| Guest | Guest devices in UniFi's hotspot zone with internet-only access |
+| Guest | Guest devices in UniFi's Hotspot zone with internet-only access |
 | Work | Work devices with their own company VPN |
 | Gaming | Consoles and gaming PCs with unfiltered DNS |
 | Lab | Testing and lab devices |
@@ -103,13 +103,13 @@ Current direction:
 - VPN clients can access selected internal services
 - server services are not reachable from every network by default
 - IoT devices are limited to required smart home communication
-- guest devices are in UniFi's hotspot zone and only get internet access
+- guest devices are in UniFi's Hotspot zone and only get internet access
 - work devices only get internet access and cannot reach internal networks
 - gaming devices only get internet access and cannot reach internal networks
 - printer access is limited to printing-related traffic
 - lab devices are separated from normal productive services where possible
 - untrusted devices are not treated like trusted clients
-- the offsite backup peer can only be reached by the Unraid server and cannot start connections itself
+- the offsite backup target can only be reached by the Unraid server and cannot start connections into my internal networks
 
 I try not to create random allow rules just to make something work quickly. If an exception is needed, it should be documented or cleaned up later.
 
@@ -128,7 +128,7 @@ I mainly use it for:
 - reviewing alerts when something looks unusual
 - learning how normal traffic in my network behaves
 
-One open point is the gateway itself. By default, every internal zone can reach the gateway on all of its services, including the management interface. Segmentation protects the other networks, but not the gateway. For IoT, Lab, Gaming and Work I want to allow only what these devices actually need from the gateway, like DNS and DHCP, and block the rest.
+One open point is the gateway itself. By default, UniFi lets every internal zone reach the gateway on all of its services, including the management interface. Segmentation protects the other networks, but not the gateway. For IoT, Lab, Gaming and Work I want to allow only what these devices actually need from the gateway, like DNS and DHCP, and block the rest.
 
 For a homelab, I think the realistic goal is not to pretend that this is a full security operations setup. The useful part is building habits around visibility, review and clean network design.
 
@@ -161,7 +161,7 @@ Current approach:
 - public exposure is avoided unless there is a clear reason
 - firewall rules define what VPN clients can reach
 
-The offsite backup target uses the same WireGuard server on the gateway. It connects as a client, just like my remote devices, but firewall rules only allow the Unraid server to reach it.
+The offsite backup target also connects through WireGuard on the gateway, but in its own VPN network, separate from my remote devices. Firewall rules only allow the Unraid server to reach it.
 
 ---
 
