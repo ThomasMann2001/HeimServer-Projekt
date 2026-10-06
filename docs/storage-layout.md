@@ -12,9 +12,9 @@ I try to keep storage roles separated instead of putting everything on one disk 
 |---|---:|---:|---|
 | NVMe SSD | WD Red SN700 | 500 GB | AppData, Docker data and cache |
 | HDD | WDC WD80EFPX | 8 TB | Main data disk |
-| HDD | Parity disk | 8 TB | Unraid parity protection |
+| HDD | WDC WD80EFPX | 8 TB | Unraid parity protection |
 | HDD | WDC WD40EFRX | 4 TB | Local backup target |
-| HDD | Private data disk | 4 TB | Private and important data |
+| HDD | WDC WD40EFRX | 4 TB | Private and important data |
 | SATA SSD | Micron 1100 MTFDDAK256TBN | 256 GB | VMs, testing and lab workloads |
 
 Additional SATA connectivity is provided through an M.2 PCIe SATA expansion adapter. This allows the Jonsbo N6 build to use more drive bays than the mainboard alone would provide.
@@ -59,7 +59,7 @@ This data is important for service recovery and is included in the AppData backu
 
 The Unraid array is used for long-term data storage.
 
-The current main data disk is an 8 TB WDC WD80EFPX. The array also has an active 8 TB parity disk.
+The current main data disk is an 8 TB WDC WD80EFPX. The array also has an active 8 TB parity disk, also a WDC WD80EFPX.
 
 Parity protects against the failure of one data disk, but it is not a backup. It does not protect against accidental deletion, corruption, ransomware, misconfiguration or user mistakes.
 
@@ -99,7 +99,7 @@ The offsite backup target is not part of the server. It is a Raspberry Pi with a
 
 The disk is formatted with XFS and spins down after a short idle time, because it is only needed once a week.
 
-The WD40EFAX is an SMR drive. For a backup target that is written once a week with mostly sequential writes, this is acceptable. The array and the local backup disk use CMR drives.
+The WD40EFAX is an SMR drive. For a backup target that is written once a week with mostly sequential writes, this is acceptable. All disks in the Unraid array are CMR drives.
 
 More details: [Backup Strategy](backup-strategy.md)
 
