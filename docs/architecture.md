@@ -47,7 +47,7 @@ flowchart TD
     Flex8 --> WiredClients
     FlexMini --> WiredClients
     AP --> WiFiClients
-    UCG -.->|"WireGuard site-to-site"| Offsite
+    Offsite -.->|"WireGuard client-to-site"| UCG
 
     subgraph UnraidHost["Unraid Host"]
         Docker["Docker Engine"]
@@ -118,7 +118,7 @@ The access model is based on VPN-first remote access and controlled internal acc
 | Work devices | Internet-only access, isolated from all internal networks |
 | Gaming devices | Internet-only access, isolated from all internal networks |
 | Lab devices | Restricted testing access, separated from normal production services |
-| Offsite backup target | Only reachable from the Unraid server, cannot start connections into the network |
+| Offsite backup target | Only reachable from the Unraid server, cannot open connections into my internal networks |
 
 Internal services are not exposed publicly by default. If a service needs to be reachable, I prefer to document the access path instead of adding temporary exceptions and forgetting about them later.
 
@@ -137,7 +137,7 @@ The network is segmented into different zones. The exact implementation is docum
 | Server | Unraid and infrastructure services |
 | Media | Media and TV devices |
 | IoT | Smart home and IoT devices |
-| Guest | Guest devices in UniFi's hotspot zone with internet-only access |
+| Guest | Guest devices in UniFi's Hotspot zone with internet-only access |
 | Work | Work devices with their own company VPN |
 | Gaming | Consoles and gaming PCs with unfiltered DNS |
 | Lab | Testing and lab devices |
@@ -199,7 +199,7 @@ Current backup layers:
 - Weekly backups for photos and selected important data
 - Monthly backups for mostly static archive data
 - Dedicated local backup disk
-- Weekly offsite backup with restic over a WireGuard site-to-site tunnel
+- Weekly offsite backup with restic over a WireGuard tunnel
 - Monitoring and notifications for the offsite backup job
 
 More details: [Backup Strategy](backup-strategy.md)
